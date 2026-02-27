@@ -1,12 +1,10 @@
-import time
-from src.interaction.ScreenPosition import ScreenPosition as sP
-from src.tasks.BaseEfTask import BaseEfTask
-from src.interaction.Mouse import active_and_send_mouse_delta,run_at_window_pos
-from src.data.features import FeatureList
-import pyautogui
 import re
-from src.image.hsv_config import HSVRange as hR
+import time
+
 from src.data.world_map import exchange_goods_dict
+from src.image.hsv_config import HSVRange as hR
+from src.tasks.BaseEfTask import BaseEfTask
+
 on_zip_line_tip = ["移动鼠标", "选择前进目标", "向目标移动", "离开滑索架"]
 on_zip_line_stop = [re.compile(i) for i in on_zip_line_tip]
 class Test(BaseEfTask):
@@ -23,7 +21,7 @@ class Test(BaseEfTask):
             self.click(result,after_sleep=1)
             self.next_frame()
             result1=self.ocr(match=re.compile(r"^\d+$"),box=self.box_of_screen(1527/1920,367/1080,1600/1920,400/1080),log=True)
-            self.wait_click_ocr(match=re.compile("查看好友价格"),box=sP.bottom_right,after_sleep=2)
+            self.wait_click_ocr(match=re.compile("查看好友价格"), box=self.box.bottom_right, after_sleep=2)
             self.next_frame()
             result2=self.ocr(match=re.compile(r"\d+$"),box=self.box_of_screen(800/1920,430/1080,1270/1920,490/1080),frame_processor=self.make_hsv_isolator(hR.DARK_GRAY_TEXT),log=True)
             if not result:
@@ -39,7 +37,9 @@ class Test(BaseEfTask):
             self.back(after_sleep=0.5)
     def to_friend_exchange(self):
         start_time = time.time()
-        while not self.wait_ocr(match=re.compile("物资调度终端"), box=sP.BOTTOM_RIGHT.value, time_out=1):
+        short_distance_flag=False
+        fail_count=0
+        while not self.wait_ocr(match=re.compile("物资调度终端"), box=self.box.bottom_right, time_out=1):
             if time.time() - start_time > 200:
                 self.log_info("前往干员联络站超时")
                 return
