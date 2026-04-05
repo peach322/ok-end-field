@@ -25,6 +25,7 @@ from src.interaction.KeyConfig import KeyConfigManager
 from src.interaction.Mouse import active_and_send_mouse_delta, move_to_target_once, run_at_window_pos
 from src.interaction.ScreenPosition import ScreenPosition
 from src.tasks.mixin.process_manager import ProcessManager
+
 feature_values = [f.value for f in fL]
 
 
@@ -56,24 +57,29 @@ class BaseEfTask(BaseTask, ProcessManager):
         self._start_detector_loading()
 
     def find_danger(self):
-        danger_group_fixed = ["danger_"+ str(i) for i in range(3, 6)]
+        danger_group_fixed = ["danger_" + str(i) for i in range(3, 6)]
         for danger in danger_group_fixed:
-            result = self.find_one(danger, threshold=0.8,vertical_variance=0.001, horizontal_variance=0.001)
+            result = self.find_one(danger, threshold=0.8, vertical_variance=0.01, horizontal_variance=0.01)
             if result:
                 return True
         danger_group = ["danger_" + str(i) for i in range(1, 3)]
-        danger_group_box = self.box_of_screen(840/1920, 640/1080, 1720/1920, 800/1080)
+        danger_group_box = self.box_of_screen(640 / 1920, 480 / 1080, 1300 / 1920, 600 / 1080)
         for danger in danger_group:
-            result = self.find_one(danger, threshold=0.8, box=danger_group_box)
+            result = self.find_one(danger, threshold=0.8, box=danger_group_box, vertical_variance=0.01,
+                                   horizontal_variance=0.01)
             if result:
                 return True
-    def click(self, x = -1, y = -1, move_back = False, name = None, interval = -1, move = True, down_time = 0.01, after_sleep = 0, key = 'left'):
+        return False
+
+    def click(self, x=-1, y=-1, move_back=False, name=None, interval=-1, move=True, down_time=0.01, after_sleep=0,
+              key='left'):
         self.sleep(0.1)
         if self.find_danger():
             self.log_info("dangerous")
             self.kill_game()
             raise Exception("dangerous")
         return super().click(x, y, move_back, name, interval, move, down_time, after_sleep, key)
+
     def info_set(self, key, value):
         if self.current_user:
             key = f"{key}({self.current_user[-4:]})"
@@ -652,7 +658,7 @@ class BaseEfTask(BaseTask, ProcessManager):
                 self.click(confirm, after_sleep=after_sleep)
                 if recheck_time > 0:
                     self.sleep(recheck_time)
-                    if confirm:=self.find_confirm():
+                    if confirm := self.find_confirm():
                         self.click(confirm, after_sleep=after_sleep)
                         return True
                 return True
