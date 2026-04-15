@@ -323,8 +323,9 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                     left_ticket, stage_name, category_name,
                     no_battle=self.config.get("仅站桩", False),
                 )
-            except Exception:
+            except Exception as e:
                 # 能量淤积点情况复杂，出现异常的概率比较大，单独截图以便分析。
+                self.log_info(f"battle_gather 异常: {e}\n{traceback.format_exc()}")
                 self.screenshot(f'{datetime.now().strftime("%Y%m%d")}_DailyBattleMixin_battleGather_Exception')
                 return False
         # 协议空间 or 危境预演
