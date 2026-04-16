@@ -1,14 +1,7 @@
 import re
 
-from src.tasks.BaseEfTask import BaseEfTask
-from src.tasks.daily.daily_liaison_mixin import DailyLiaisonMixin
-from src.data.FeatureList import FeatureList as fL
-from src.tasks.mixin.common import Common
 from src.tasks.mixin.login_mixin import LoginMixin
-from src.tasks.AutoCombatLogic import AutoCombatLogic
-from src.interaction.Mouse import run_at_window_pos
 import pyautogui
-from ok import TaskDisabledException
 
 
 class Test(LoginMixin):
@@ -20,6 +13,7 @@ class Test(LoginMixin):
 
     def run(self):
         self.wait_click_ocr(match=re.compile("立即刷新"), time_out=5, box=self.box.bottom_right, log=True)
+
     def _type_text(self, text: str):
         """
         通用输入（支持中文）
