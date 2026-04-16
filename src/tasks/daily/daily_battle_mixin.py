@@ -417,7 +417,7 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
             if not self.to_battle(no_battle=no_battle, challenge_check=challenge_check):
                 return False
             # 移至奖励发放点，按下 F
-            if not self.to_end(challenge=challenge_check):
+            if not self.to_end(challenge=challenge_check, stage_name=stage_name, category_name=category_name):
                 self.log_info("未发现奖励领取点")
                 if category_name == "能量淤积点":
                     if not self._gather_retry_navigate(stage_name, category_name):
@@ -553,40 +553,69 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                     return False
         return self.auto_battle(no_battle=no_battle)
 
-    def to_end(self, challenge=False):
+    def to_end(self, challenge=False, stage_name=None, category_name=None):
         if challenge:
-            end_feature_name = fL.gather_icon_out_map2
+            end_feature_name = [fL.gather_icon_out_map2, fL.gather_icon_out_map]
             use_yolo = False
             search_box = None
+            need_follow= True
+            for end_feature in end_feature_name:
+                if self.find_feature(
+                    end_feature,
+                    box=self.box_of_screen((1920 - 1550) / 1920, 150 / 1080, 1550 / 1920, (1080 - 150) / 1080),
+                ):
+                    need_follow = False
+                    break
+            # F8 索引
+            if need_follow:
+                self._open_index()
+                # 进入副本详情页
+                if not self.to_stage(stage_name, category_name):
+                    self.log_info("二次寻路失败：无法进入『能量淤积点』详情页")
+                    return False
+                if result := self.wait_ocr(match=re.compile("追踪"), box=self.box.bottom_right, time_out=5):
+                    if "追踪" in result[0].name and "取" not in result[0].name and "消" not in result[0].name:
+                        self.log_info("点击追踪按钮")
+                        self.click(result, after_sleep=2)
+                    self.ensure_main()
+                else:
+                    raise Exception("未找到追踪按钮")
         else:
             end_feature_name = "battle_end"
             use_yolo = True
             search_box = self.box_of_screen((1920 - 1550) / 1920, 0, 1550 / 1920, (1080 - 150) / 1080)
-        for _ in range(9):
-            if challenge:
-                if self.find_feature(
-                        end_feature_name,
-                        box=self.box_of_screen((1920 - 1550) / 1920, 150 / 1080, 1550 / 1920, (1080 - 150) / 1080),
-                ):
-                    break
-            else:
+            for _ in range(9):
                 if self.yolo_detect(end_feature_name, box=search_box):
                     break
-            self.click(key="middle", after_sleep=2)
-            self.move_keys("aw", duration=0.1)
-            self.sleep(1)
-        #
+                self.click(key="middle", after_sleep=2)
+                self.move_keys("aw", duration=0.1)
+                self.sleep(1)
         start_time = time.time()
-        while time.time() - start_time < 60:
-            if not self.align_ocr_or_find_target_to_center(end_feature_name, ocr=False, use_yolo=use_yolo, box=search_box, only_x=True, raise_if_fail=False, threshold=0.5, tolerance=100):
-                return False
-            if self.wait_ocr(match=re.compile("领取"), time_out=1, box=self.box.bottom_right):
-                self.sleep(0.5)
-                self.press_key("f", down_time=0.2)
-                return True
+        try:
+            while self.align_ocr_or_find_target_to_center(end_feature_name, ocr=False, use_yolo=use_yolo, box=search_box,
+                                                        only_x=True, threshold=0.5, tolerance=100):
+                if time.time() - start_time > 60:
+                    if challenge:
+                        raise TimeoutError("等待奖励发放点超时")
+                    else:
+                        return False
+                if result:= self.wait_ocr(match=re.compile("领取"), time_out=1, box=self.box.bottom_right):
+                    self.sleep(0.5)
+                    self.click_with_alt(result[0])
+                    break
+                else:
+                    self.move_keys('w', duration=0.25)
+        except Exception as e:
+            if category_name == "能量淤积点":
+                self.log_info(f"未找到奖励发放点，尝试二次寻路: {e}")
+                if self._gather_retry_navigate(stage_name, category_name):
+                    return True
+                else:
+                    self.log_info("二次寻路失败，无法找到奖励发放点")
+                    return False
             else:
-                self.move_keys('w', duration=0.25)
-        return False
+                raise e
+        return True
 
     def get_claim(self, ticket_number, sum_ticket_number):
         """
