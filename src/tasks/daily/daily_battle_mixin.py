@@ -419,11 +419,7 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
             # 移至奖励发放点，按下 F
             if not self.to_end(challenge=challenge_check, stage_name=stage_name, category_name=category_name):
                 self.log_info("未发现奖励领取点")
-                if category_name == "能量淤积点":
-                    if not self._gather_retry_navigate(stage_name, category_name):
-                        return False
-                else:
-                    return False
+                return False
             # 在『有可领取的奖励』页面上领取奖励
             left_ticket = self.get_claim(stages_cost[category_name], left_ticket)
             #
