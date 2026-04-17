@@ -85,19 +85,19 @@ all potential risks.**
 
 ### One-time tasks (manual click to run)
 
-- [Daily Task](docs/日常任务.md): gift giving, outpost exchange, delivery handling, market trading, stamina farming,
+- Daily Task (see `docs/日常任务.md`, Chinese doc): gift giving, outpost exchange, delivery handling, market trading, stamina farming,
   reward claim, and more
-- [Stamina Farming](docs/体力本.md): normal/high-tier stages, danger stages, heavy energy nodes, skill timeline support
-- [Delivery Commission Pickup](docs/运送委托接取.md): filter by ticket type + reward range and auto pickup
-- [Auto Delivery](docs/自动送货.md): Wuling delivery automation with configurable route sequences (7.31w/7.98w)
-- [Warehouse Transfer](docs/仓库物品转移.md): cross-warehouse batch transfer for selected items
-- [Graduation Essence Scanner](docs/毕业基质识别.md): scan essence list and process lock/handling by
+- Stamina Farming (see `docs/体力本.md`, Chinese doc): normal/high-tier stages, danger stages, heavy energy nodes, skill timeline support
+- Delivery Commission Pickup (see `docs/运送委托接取.md`, Chinese doc): filter by ticket type + reward range and auto pickup
+- Auto Delivery (see `docs/自动送货.md`, Chinese doc): Wuling delivery automation with configurable route sequences (7.31w/7.98w)
+- Warehouse Transfer (see `docs/仓库物品转移.md`, Chinese doc): cross-warehouse batch transfer for selected items
+- Graduation Essence Scanner (see `docs/毕业基质识别.md`, Chinese doc): scan essence list and process lock/handling by
   `assets/weapon_data.csv`
 - Periodic Screenshot: interval-based auto capture for data collection / training samples
 
 ### Trigger tasks (background loop detection)
 
-- [Auto Combat](docs/自动战斗.md): battle-state detection and automatic skill release
+- Auto Combat (see `docs/自动战斗.md`, Chinese doc): battle-state detection and automatic skill release
 - Auto Pickup: whitelist pickup + blacklist filtering
 - Auto Login: automatic relogin handling
 - Auto Skip Dialog: recognize and process skip/confirm flow
