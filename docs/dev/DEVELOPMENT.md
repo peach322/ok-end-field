@@ -161,7 +161,7 @@ ok-end-field/
 │           └── zip_line_mixin.py  # 滑索操作：对齐滑索距离标识→按 E 连续移动
 │
 ├── assets/                    # 静态资源（由 ok-script debug 模式自动裁剪生成）
-│   ├── coco_detection.json    # COCO 格式标注，定义模板图片在游戏截图中的位置
+│   ├── coco_annotations.json  # COCO 格式标注，定义模板图片在游戏截图中的位置
 │   ├── images/                # 模板匹配图片（文件名对应 FeatureList 枚举值）
 │   ├── items/images/          # 物品图标模板（用于仓库转移物品识别）
 │   └── models/yolo/best.onnx  # YOLOv8 战斗结束检测模型
@@ -170,7 +170,19 @@ ok-end-field/
 │   ├── 日常任务.md
 │   ├── 体力本.md
 │   ├── 排轴.md
-│   └── 自动送货.md
+│   ├── 自动战斗.md
+│   ├── 自动送货.md
+│   ├── 运送委托接取.md
+│   ├── 仓库物品转移.md
+│   ├── 毕业基质识别.md
+│   ├── 账号配置用户指南.md
+│   ├── 账号唯一ID与多账户覆盖默认逻辑.md
+│   └── dev/                   # 面向开发者的技术文档
+│       ├── QUICKSTART.md
+│       ├── DEVELOPMENT.md
+│       ├── API.md
+│       ├── 键盘操作体系.md
+│       └── 账号唯一ID与多账户覆盖默认逻辑.md
 │
 ├── target_doc/                # 待补充文档（需开发者填写）
 │   └── 自动大世界收菜.md
@@ -197,7 +209,7 @@ ok-end-field/
 │   │   └── mirrorchyan_release_note.yml # Mirror 酱发布说明
 │   └── ISSUE_TEMPLATE/            # Bug 报告模板
 │
-└── x-anylabeling-asset/       # AnyLabeling 标注工具配置（用于标注新模板图片）
+└── ok_templates/              # 子模块：AnyLabeling 标注工具配置（用于标注新模板图片）
 ```
 
 ---
@@ -214,7 +226,7 @@ ok-end-field/
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/AliceJump/ok-end-field.git
+git clone https://github.com/ok-oldking/ok-end-field.git
 cd ok-end-field
 
 # 2. 安装依赖
@@ -283,8 +295,8 @@ python main_debug.py
 
 ### 5.4 添加新的模板图片（Feature）
 
-1. 在 `main_debug.py` 模式下运行，框架会根据 `assets/coco_detection.json` 自动裁剪保留标注区域。
-2. 使用 **AnyLabeling**（配置在 `x-anylabeling-asset/`）对新截图打矩形框标注，导出 COCO JSON，合并到 `assets/coco_detection.json`。
+1. 在 `main_debug.py` 模式下运行，框架会根据 `assets/coco_annotations.json` 自动裁剪保留标注区域。
+2. 使用 **AnyLabeling**（配置在 `ok_templates/`）对新截图打矩形框标注，导出 COCO JSON，合并到 `assets/coco_annotations.json`。
 3. 运行 `compress.py`（cwd 为项目根目录），脚本会自动压缩图片并更新 `src/data/FeatureList.py`（无需手动填写）。
 4. 在代码中通过 `self.find_feature(fL.my_new_feature)` 调用。
 

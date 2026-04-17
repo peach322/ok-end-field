@@ -18,7 +18,7 @@
 ### 1.2 克隆仓库
 
 ```bash
-git clone --recurse-submodules https://github.com/AliceJump/ok-end-field.git
+git clone --recurse-submodules https://github.com/ok-oldking/ok-end-field.git
 cd ok-end-field
 ```
 
