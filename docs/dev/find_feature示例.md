@@ -11,10 +11,23 @@
 | 函数 | 何时用 |
 |------|--------|
 | `find_feature(feature_name, box, threshold)` | 对当前帧做一次模板匹配；找到时返回 `List[Box]`，未找到时返回空列表 |
-| `find_one(feature_name, box, threshold)` | `find_feature` 的便捷封装，只返回第一个匹配结果（`Box` 或 `None`） |
+| `find_one(feature_name, box, threshold)` | `find_feature` 的便捷封装，只返回**置信度最高**的那个匹配结果（`Box` 或 `None`） |
 
 `feature_name` 接受 `FeatureList` 枚举值、枚举值组成的列表，或直接使用字符串。
 框架会根据当前分辨率自动选取 `_2k` / `_4k` 后缀变体（如有）。
+
+> **不传 `box` 时的默认搜索区域**
+>
+> 模板图片（`feature_name` 对应的素材文件）在制作时通常从一张完整的参考截图中框选而来，
+> 例如从一张 3840×2160 的截图右上角裁出某图标。
+> 当调用时**省略 `box` 参数**，框架会自动读取该模板在参考截图中的原始位置，
+> 并将其换算成**相对比例**，再映射到实际程序窗口的对应区域进行扫描。
+>
+> 这意味着：**你不需要手动计算坐标**，只需要在制作素材时把模板放在截图的正确位置，
+> 框架就能自动把搜索范围限定在屏幕上的合理区域，避免全屏误匹配。
+>
+> 如果你需要**动态指定搜索范围**（例如根据上一步操作的结果缩小区域），
+> 才需要显式传入 `box`。
 
 ---
 
@@ -37,6 +50,7 @@ class ExampleFindFeature(BaseEfTask, BaseTask):
 
     def run(self):
         # find_feature 返回 List[Box]，未找到时返回空列表
+        # 不传 box：框架自动用 fL.close 模板的原始截图坐标限定搜索区域
         result = self.find_feature(feature_name=fL.close)
 
         if not result:
@@ -50,9 +64,10 @@ class ExampleFindFeature(BaseEfTask, BaseTask):
 
 ---
 
-## 示例二：限制搜索区域（`box` 参数）
+## 示例二：动态指定搜索区域（`box` 参数）
 
-> **场景**：只在右上角区域寻找 ESC 图标，避免在其他位置产生误匹配。
+> **场景**：上一步操作后 ESC 图标可能出现在右上角的**不固定**位置，
+> 需要动态限制搜索范围；或者你希望覆盖模板默认位置，手动控制扫描区域。
 
 ```python
 # src/tasks/ExampleFindFeatureBox.py
@@ -65,11 +80,12 @@ class ExampleFindFeatureBox(BaseEfTask, BaseTask):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.name = "示例：find_feature + box"
-        self.description = "限制搜索区域的模板匹配"
+        self.description = "动态指定搜索区域的模板匹配"
 
     def run(self):
         # box_of_screen 的参数是 0.0~1.0 的相对比例
-        # 这里只在右上角 20%×15% 的区域搜索
+        # 显式传入 box 会覆盖模板的默认搜索位置
+        # 这里只在右上角 20%×15% 的区域搜索，比默认区域更宽松
         top_right = self.box_of_screen(0.8, 0.0, 1.0, 0.15)
 
         result = self.find_feature(
@@ -117,14 +133,49 @@ class ExampleFindFeatureMultiple(BaseEfTask, BaseTask):
             self.log_info("未找到聊天图标")
             return
 
-        # result 按相似度从高到低排列，取第一个（最佳匹配）点击
+        # find_feature 按置信度从高到低排列，result[0] 是最佳匹配
         self.log_info(f"找到图标：{result[0].name}，相似度：{result[0].confidence:.2f}")
         self.click(result[0], after_sleep=0.5)
 ```
 
 ---
 
-## 示例四：轮询等待图标出现
+## 示例四：用 `find_one` 取置信度最高的结果
+
+> **场景**：屏幕上同时存在多个相似图标（例如列表里有若干个「关闭」按钮），
+> 只需要操作**相似度最高**的那个时，使用 `find_one` 更简洁。
+> `find_one` 在内部调用 `find_feature` 后取置信度最大的 `Box` 返回；
+> 未找到时返回 `None`，无需手动取 `result[0]`。
+
+```python
+# src/tasks/ExampleFindOne.py
+from ok import BaseTask
+from src.data.FeatureList import FeatureList as fL
+from src.tasks.BaseEfTask import BaseEfTask
+
+
+class ExampleFindOne(BaseEfTask, BaseTask):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.name = "示例：find_one"
+        self.description = "取置信度最高的图标并点击"
+
+    def run(self):
+        # find_one 直接返回 Box 或 None，不需要 result[0]
+        # 模板的默认搜索位置（由素材图片中的原始坐标决定）会被自动使用
+        best = self.find_one(feature_name=fL.close, threshold=0.8)
+
+        if not best:
+            self.log_info("未找到关闭按钮")
+            return
+
+        self.log_info(f"找到关闭按钮，置信度：{best.confidence:.2f}")
+        self.click(best, after_sleep=0.5)
+```
+
+---
+
+## 示例五：轮询等待图标出现
 
 > **场景**：某个图标需要等待数秒后才出现（如战斗结束后的奖励图标），
 > `find_feature` 不会自动等待，需要用循环轮询。
