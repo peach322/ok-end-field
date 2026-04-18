@@ -85,24 +85,26 @@ all potential risks.**
 
 ### One-time tasks (manual click to run)
 
-- Daily Task (gift giving, outpost exchange, delivery handover, delivery reward claim, weapon crafting, credit
-  collection, clue collection, market trading, daily rewards, weekly rewards, protocol pass reward, etc.)
-- Delivery Commission Pickup (filter by ticket type + reward range, smart scrolling, retry mechanism)
-- Auto Delivery (Wuling 7.31w commission, zipline number recognition navigation)
-- Warehouse Transfer (cross-warehouse batch transfer, min reserve quantity support)
-- Graduation Essence Scanner (traverse weapon essence list, recognize graduation affixes by `assets/weapon_data.csv` and
-  lock)
+- Daily Task (see `docs/日常任务.md`, Chinese doc): gift giving, outpost exchange, delivery handling, market trading, stamina farming,
+  reward claim, and more
+- Stamina Farming (see `docs/体力本.md`, Chinese doc): normal/high-tier stages, danger stages, heavy energy nodes, skill timeline support
+- Delivery Commission Pickup (see `docs/运送委托接取.md`, Chinese doc): filter by ticket type + reward range and auto pickup
+- Auto Delivery (see `docs/自动送货.md`, Chinese doc): Wuling delivery automation with configurable route sequences (7.31w/7.98w)
+- Warehouse Transfer (see `docs/仓库物品转移.md`, Chinese doc): cross-warehouse batch transfer for selected items
+- Graduation Essence Scanner (see `docs/毕业基质识别.md`, Chinese doc): scan essence list and process lock/handling by
+  `assets/weapon_data.csv`
+- Periodic Screenshot: interval-based auto capture for data collection / training samples
 
 ### Trigger tasks (background loop detection)
 
-- Auto Combat (skill point threshold triggers skill sequence)
-- Auto Pickup (whitelist pickup + blacklist filter)
-- Auto Login (auto handle logged-out state)
-- Auto Skip Dialog (recognize "skip/confirm" flow)
+- Auto Combat (see `docs/自动战斗.md`, Chinese doc): battle-state detection and automatic skill release
+- Auto Pickup: whitelist pickup + blacklist filtering
+- Auto Login: automatic relogin handling
+- Auto Skip Dialog: recognize and process skip/confirm flow
 
 ### Scheduled tasks (Windows Task Scheduler management)
 
-- You can select suitable tasks to add to the schedule, Windows will launch them automatically
+- You can add one-time tasks into Windows Task Scheduler for automatic launch
 
 ## Runtime Requirements & Recommendations
 
