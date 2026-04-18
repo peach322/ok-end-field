@@ -74,11 +74,11 @@ def find_feature(
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | `feature_name` | `FeatureList` \| `str` | 特征名（枚举成员或字符串） |
-| `box` | `Box \| None` | 限制搜索区域；`None` 表示全屏 |
+| `box` | `Box \| None` | 限制搜索区域；`None` 时框架从 `coco_annotations.json` 读取该模板的标注位置作为默认搜索范围 |
 | `threshold` | `float` | 匹配阈值，默认 `0`（使用框架默认值） |
 | `use_gray_scale` | `bool` | 是否转灰度匹配 |
-| `horizontal_variance` | `int` | 水平搜索扩展像素 |
-| `vertical_variance` | `int` | 垂直搜索扩展像素 |
+| `horizontal_variance` | `int` | 在默认搜索区域基础上向 x 方向扩展的偏差像素 |
+| `vertical_variance` | `int` | 在默认搜索区域基础上向 y 方向扩展的偏差像素 |
 | `frame` | `ndarray \| None` | 传入指定帧，`None` 则自动截取最新帧 |
 
 ```python

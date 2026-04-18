@@ -18,13 +18,18 @@
 
 > **不传 `box` 时的默认搜索区域**
 >
-> 模板图片（`feature_name` 对应的素材文件）在制作时通常从一张完整的参考截图中框选而来，
-> 例如从一张 3840×2160 的截图右上角裁出某图标。
-> 当调用时**省略 `box` 参数**，框架会自动读取该模板在参考截图中的原始位置，
+> 模板图片（`feature_name` 对应的素材文件）通常通过以下方式制作：
+> 直接对游戏进行截图，再用标注软件（或本软件 debug 模式左侧「模板」Tab 内的功能）
+> 对原始截图的某区域进行标记。标注工具会将裁剪后的模板图片保存到 `assets/images/`，
+> 并将该区域的坐标记录到 `assets/coco_annotations.json`。
+> 当调用时**省略 `box` 参数**，框架会自动从 `coco_annotations.json` 读取该模板的标注位置，
 > 并将其换算成**相对比例**，再映射到实际程序窗口的对应区域进行扫描。
 >
-> 这意味着：**你不需要手动计算坐标**，只需要在制作素材时把模板放在截图的正确位置，
+> 这意味着：**你不需要手动计算坐标**，只需在制作素材时通过标注工具正确标记模板在截图中的位置，
 > 框架就能自动把搜索范围限定在屏幕上的合理区域，避免全屏误匹配。
+>
+> 如果需要在默认搜索区域的基础上增加容差，可使用 `vertical_variance` / `horizontal_variance`
+> 参数指定 y / x 方向的偏差像素，无需显式传入 `box`。
 >
 > 如果你需要**动态指定搜索范围**（例如根据上一步操作的结果缩小区域），
 > 才需要显式传入 `box`。
@@ -50,7 +55,7 @@ class ExampleFindFeature(BaseEfTask, BaseTask):
 
     def run(self):
         # find_feature 返回 List[Box]，未找到时返回空列表
-        # 不传 box：框架自动用 fL.close 模板的原始截图坐标限定搜索区域
+        # 不传 box：框架自动从 coco_annotations.json 读取 fL.close 的标注位置限定搜索区域
         result = self.find_feature(feature_name=fL.close)
 
         if not result:
@@ -84,7 +89,7 @@ class ExampleFindFeatureBox(BaseEfTask, BaseTask):
 
     def run(self):
         # box_of_screen 的参数是 0.0~1.0 的相对比例
-        # 显式传入 box 会覆盖模板的默认搜索位置
+        # 显式传入 box 会覆盖从 coco_annotations.json 读取的默认搜索位置
         # 这里只在右上角 20%×15% 的区域搜索，比默认区域更宽松
         top_right = self.box_of_screen(0.8, 0.0, 1.0, 0.15)
 
@@ -162,7 +167,7 @@ class ExampleFindOne(BaseEfTask, BaseTask):
 
     def run(self):
         # find_one 直接返回 Box 或 None，不需要 result[0]
-        # 模板的默认搜索位置（由素材图片中的原始坐标决定）会被自动使用
+        # 模板的默认搜索位置（由 coco_annotations.json 中的标注坐标决定）会被自动使用
         best = self.find_one(feature_name=fL.close, threshold=0.8)
 
         if not best:
