@@ -104,4 +104,4 @@ config = {
 
 | 文档 | 说明 |
 |------|------|
-| [图像模板匹配示例.md](图像模板匹配示例.md) | find_feature / find_one 完整示例任务 |
+| [文字识别示例.md](文字识别示例.md) | ocr / wait_ocr / click / wait_click_ocr 完整示例任务 |
