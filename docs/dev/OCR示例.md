@@ -264,6 +264,62 @@ class ExampleAltClick(BaseEfTask, BaseTask):
 
 ---
 
+## 示例六：`recheck_time` — 等待画面稳定后再点击
+
+> **为什么需要 `recheck_time`？**
+>
+> `wait_ocr` 找到目标文字后会**立即**尝试点击，但部分按钮在首次出现时仍处于
+> 入场动画中，位置还未稳定；或者文字刚好出现在过渡画面里，1~2 帧后就消失。
+> 此时直接点击可能命中错误位置，或点到已消失的元素而静默失败。
+>
+> `recheck_time > 0` 会让框架在 `wait_ocr` 找到结果后**额外等待 1 秒**，
+> 然后再做一次 `ocr` 二次确认。若二次确认仍能找到同一文字，才执行点击；
+> 若期间元素已消失，则本次点击跳过，避免误操作。
+>
+> **经验法则**：按钮带有弹出/淡入动画，或需要等待上一步操作的 UI 结果完全渲染时，
+> 加 `recheck_time=1`；画面静止、按钮始终可见时不需要。
+
+```python
+# src/tasks/ExampleRecheckTime.py
+import re
+
+from ok import BaseTask
+from src.tasks.BaseEfTask import BaseEfTask
+
+
+class ExampleRecheckTime(BaseEfTask, BaseTask):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.name = "示例：recheck_time"
+        self.description = "演示点击前等待画面稳定的用法"
+
+    def run(self):
+        # 点击"领取奖励"按钮，该按钮有淡入动画，刚出现时位置可能偏移
+        # recheck_time=1：找到后等 1 秒再二次确认，确保动画完成后再点击
+        result = self.wait_click_ocr(
+            match=re.compile("领取奖励"),
+            box=self.box.bottom_right,
+            time_out=10,
+            recheck_time=1,
+        )
+
+        if not result:
+            self.log_info("未找到领取奖励按钮，任务结束")
+            return
+
+        self.log_info("已点击领取奖励")
+
+        # 等待确认弹窗出现并点击，同样加 recheck_time 等待弹窗完全渲染
+        self.wait_click_ocr(
+            match=re.compile("确认"),
+            box=self.box.bottom,
+            time_out=5,
+            recheck_time=1,
+        )
+```
+
+---
+
 ## 注册与运行
 
 将上述任意示例文件保存到 `src/tasks/` 后，在 `src/config.py` 中注册：
@@ -280,3 +336,11 @@ config = {
 ```
 
 重启程序（`python main_debug.py`），在 GUI 任务列表中即可找到并运行。
+
+---
+
+## 后续阅读
+
+| 文档 | 说明 |
+|------|------|
+| [find_feature示例.md](find_feature示例.md) | 用模板匹配识别图标：find_feature 完整示例任务 |
