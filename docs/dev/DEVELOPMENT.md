@@ -226,7 +226,7 @@ ok-end-field/
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/ok-oldking/ok-end-field.git
+git clone https://github.com/AliceJump/ok-end-field.git
 cd ok-end-field
 
 # 2. 安装依赖
@@ -295,10 +295,10 @@ python main_debug.py
 
 ### 5.4 添加新的模板图片（Feature）
 
-1. 在 `main_debug.py` 模式下运行，框架会根据 `assets/coco_annotations.json` 自动裁剪保留标注区域。
-2. 使用 **AnyLabeling**（配置在 `ok_templates/`）对新截图打矩形框标注，导出 COCO JSON，合并到 `assets/coco_annotations.json`。
-3. 运行 `compress.py`（cwd 为项目根目录），脚本会自动压缩图片并更新 `src/data/FeatureList.py`（无需手动填写）。
-4. 在代码中通过 `self.find_feature(fL.my_new_feature)` 调用。
+1. 以 `main_debug.py` 模式启动程序，框架会根据 `ok_templates/` 子模块下的文件数据自动生成标签列表。
+2. 点击 GUI 左侧的**模板 tab**，即可查看所有已加载的截图及其对应的标签 label（详细机制见 ok-script 库文档）。
+3. 在 `ok_templates/` 中添加或更新标注文件后，重启程序即可在模板 tab 中看到新特征。
+4. 在代码中通过 `self.find_feature(fL.my_new_feature)` 调用新特征。
 
 > 分辨率适配：若需要支持 2K/4K，按命名约定 `feature_name_2k`、`feature_name_4k` 提供对应尺寸的图片，`BaseEfTask.get_feature_by_resolution()` 会自动按分辨率选择。
 
