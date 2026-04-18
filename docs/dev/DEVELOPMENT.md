@@ -69,9 +69,10 @@ DailyTask
  ├── DailyBuyMixin        (买物资)
  ├── DailyBattleMixin     (刷体力)  ─── BattleMixin, MapMixin, ZipLineMixin
  ├── DailyTradeMixin      (买卖货)  ─── NavigationMixin
- ├── DailyShopMixin       (信用商店)
+ ├── DailyShopMixin       (买信用商店)
  ├── DailyRoutineMixin    (其它日常) ── LiaisonMixin ─── NavigationMixin
  ├── DailyLiaisonMixin    (送礼)    ─── LiaisonMixin
+ ├── EndCommandMixin      (结尾外部命令)
  └── AccountMixin         (多账号)  ─── LoginMixin
 ```
 
@@ -139,7 +140,8 @@ ok-end-field/
 │       ├── WarehouseTransferTask.py # 一次性任务：跨仓库物品转移
 │       │
 │       ├── account/
-│       │   └── account_mixin.py # 多账号模式：账号列表解析、切号逻辑
+│       │   ├── account_mixin.py        # 多账号模式：账号列表解析、切号逻辑
+│       │   └── account_scope_store.py  # 账号作用域配置文件读写（JSON 持久化）
 │       │
 │       ├── daily/             # DailyTask 的子 Mixin，每个文件对应一组日常子任务
 │       │   ├── __init__.py
@@ -152,12 +154,17 @@ ok-end-field/
 │       │
 │       └── mixin/             # 通用能力 Mixin（跨任务复用）
 │           ├── __init__.py
+│           ├── account_override_mixin.py # 账号上下文配置覆盖：按账号动态替换任务配置项
 │           ├── battle_mixin.py    # 战斗能力：技能释放、必杀、连携技、战斗结束检测、排轴
 │           ├── common.py          # 公共数据结构与工具：LiaisonResult、GoodsInfo、build_name_patterns
+│           ├── end_command_mixin.py # 结尾外部命令：任务完成后执行自定义命令行程序
+│           ├── game_flow_mixin.py # 登录弹窗与主界面流程：login_screenshot/ocr、ensure_main、场景判断
 │           ├── liaison_mixin.py   # 干员联络：传送帝江号、导航联络站、送礼交互
 │           ├── login_mixin.py     # 登录流程：登出→密码登录→等待进入主界面
 │           ├── map_mixin.py       # 地图操作：打开任务界面→定位传送点→执行传送
 │           ├── navigation_mixin.py# 导航循环：持续前进+动态对齐目标直到到达
+│           ├── process_manager.py # 进程管理：kill_game / kill_all_related_processes
+│           ├── runtime_mixin.py   # 运行时能力：find_feature、按键、鼠标、YOLO、UI 稳定检测等
 │           └── zip_line_mixin.py  # 滑索操作：对齐滑索距离标识→按 E 连续移动
 │
 ├── assets/                    # 静态资源（由 ok-script debug 模式自动裁剪生成）
@@ -181,6 +188,9 @@ ok-end-field/
 │       ├── QUICKSTART.md
 │       ├── DEVELOPMENT.md
 │       ├── API.md
+│       ├── OCR示例.md
+│       ├── find_feature示例.md
+│       ├── 滑索与送货逻辑.md
 │       ├── 键盘操作体系.md
 │       └── 账号唯一ID与多账户覆盖默认逻辑.md
 │
@@ -344,18 +354,17 @@ self.press_key('f')          # 交互键，默认 'f'，用户可自定义
 self.send_key('f')
 ```
 
-**2. `move_keys`（移动按键，仅用于方向键组合）**
+**2. `self.move_keys`（移动按键，仅用于方向键组合）**
 
 ```python
-from src.interaction.move_interaction import move_keys
-
-move_keys(hwnd, keys, duration)
+self.move_keys(keys, duration, need_back=False)
 ```
 
 - `keys`：`str` 或 `list[str]`，仅限 `"w"` / `"a"` / `"s"` / `"d"`
 - `duration`：按住时长（秒）
+- `need_back`：`True` 时发送前激活游戏窗口，结束后恢复原前台窗口
 
-此函数通过 `keybd_event` 模拟原始按键，适用于需要精确控制方向键持续时间的场景（如自动寻路移动）。方向键当前不在自定义热键范围内，可直接使用字面值。
+此方法通过 `keybd_event` 模拟原始按键，适用于需要精确控制方向键持续时间的场景（如自动寻路移动）。方向键当前不在自定义热键范围内，可直接使用字面值。底层实现位于 `src/interaction/Key.py`。
 
 ### 5.7 代码规范
 
