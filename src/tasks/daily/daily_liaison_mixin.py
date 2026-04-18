@@ -7,7 +7,7 @@ from src.tasks.mixin.liaison_mixin import LiaisonMixin
 
 
 class DailyLiaisonMixin(LiaisonMixin):
-    HELP_LINK = "https://cnb.cool/ok-oldking/ok-ef-update/-/blob/main/docs/日常任务.md"
+    HELP_LINK = "https://github.com/ok-oldking/ok-end-field/blob/main/docs/日常任务.md"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

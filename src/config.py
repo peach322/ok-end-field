@@ -107,7 +107,7 @@ config = {
             "discord": "https://discord.gg/vVyCatEBgA",
             "sponsor": "https://afdian.com/a/AliceJump",
             "share": "https://1drv.ms/f/c/0c7567d06cc5b5f3/IgAudOtrzHPVT6sJgWeWSiByAZNvwAzcehIdj3hEcprRlP0?e=nsEBmm",
-            "faq": "https://cnb.cool/ok-oldking/ok-ef-update/-/blob/main/README.md",
+            "faq": "https://github.com/ok-oldking/ok-end-field/blob/main/README.md",
             "qq_group": "https://qm.qq.com/q/NcWHQU6q8k",
             "qq_channel": "https://pd.qq.com/s/djmm6l44y",
         },
