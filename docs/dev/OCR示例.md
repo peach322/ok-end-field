@@ -197,20 +197,22 @@ class ExampleOcrReadNumber(BaseEfTask, BaseTask):
 
 ---
 
-## 示例五：`alt=True` — 绕过悬停 Tooltip 的点击
+## 示例五：`alt=True` — 大世界交互点击
 
 > **为什么需要 `alt=True`？**
 >
-> 框架使用 `PostMessage` 向游戏窗口发送鼠标消息，游戏窗口不需要在前台。
-> 但部分按钮（如副本的**激发**、**领取奖励**、**放弃**）在鼠标悬停时会弹出
-> tooltip 覆盖层，此时直接发送点击消息，游戏会将点击视为命中 tooltip 而非
-> 按钮本身，导致点击**静默失败**。
+> 游戏大世界场景中，交互键默认为 `F`，但直接发送 `F` 键不可靠：
+> 角色可能正在移动，或场景内可交互道具过多，导致 `F` 键命中错误的目标。
 >
-> `alt=True` 会让框架在点击前先按住 `Alt` 键（通过 `send_key_down`），
-> 发送点击后再松开（`send_key_up`）。`Alt` 键会使游戏关闭当前 tooltip，
-> 从而让后续点击命中真正的按钮。
+> 更可靠的做法是**先按住 `Alt` 键，再用鼠标点击目标**。
+> 按住 `Alt` 后游戏会锁定鼠标焦点到对应按钮，此时鼠标点击的优先级高于
+> 场景内的通用交互，不会被其他道具或移动状态干扰。
 >
-> **经验法则**：按钮带有悬停动画或 tooltip 时加 `alt=True`；普通 UI 按钮不需要。
+> `alt=True` 让框架在发送点击前自动按下 `Alt`、点击后再松开，
+> 一步完成"Alt + 鼠标点击"的组合操作。
+>
+> **经验法则**：大世界内与场景物件/NPC 交互时使用 `alt=True`；
+> 普通菜单 UI 按钮通常不需要。
 
 ```python
 # src/tasks/ExampleAltClick.py
@@ -224,19 +226,20 @@ class ExampleAltClick(BaseEfTask, BaseTask):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.name = "示例：alt=True 点击"
-        self.description = "演示需要按住 Alt 才能正确触发的按钮"
+        self.description = "演示大世界场景中需要按住 Alt 才能可靠触发的交互"
 
     def run(self):
-        # 如果画面存在"放弃"按钮（说明有未领取的旧奖励），先放弃再继续
+        # 大世界场景：等待屏幕右下角出现"放弃"交互提示并点击
+        # 直接发 F 键可能因角色移动或道具干扰而命中错误目标
+        # alt=True 让框架先按住 Alt 再点击，锁定到正确的交互目标
         if self.wait_ocr(match=re.compile("放弃"), box=self.box.bottom_right, time_out=5):
-            self.log_info("发现放弃按钮，先放弃旧奖励")
-            # recheck_time=1：点击前再等 1 秒重新确认，防止按钮因动画偏移
+            self.log_info("发现放弃交互，执行 Alt+点击")
             self.wait_click_ocr(
                 match=re.compile("放弃"),
                 box=self.box.bottom_right,
                 time_out=5,
                 recheck_time=1,
-                alt=True,          # 按住 Alt 再点击，绕过 tooltip
+                alt=True,
             )
             self.wait_click_ocr(
                 match=re.compile("确认"),
@@ -244,7 +247,7 @@ class ExampleAltClick(BaseEfTask, BaseTask):
                 time_out=5,
             )
 
-        # 等待"激发"按钮（带有悬停 tooltip），用 alt=True 确保点击生效
+        # 等待"激发"交互出现，同样使用 alt=True 确保在大世界内可靠点击
         self.sleep(1)
         if not self.wait_click_ocr(
             match=re.compile("激发"),
@@ -253,7 +256,7 @@ class ExampleAltClick(BaseEfTask, BaseTask):
             recheck_time=1,
             alt=True,
         ):
-            self.log_info("没有找到『激发』按钮，任务结束")
+            self.log_info("没有找到『激发』交互，任务结束")
             return
 
         self.log_info("激发成功，进入战斗")
