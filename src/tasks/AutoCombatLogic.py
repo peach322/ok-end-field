@@ -1,6 +1,7 @@
 import time
 import threading
 import pyautogui
+import win32api
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -15,17 +16,16 @@ class AutoCombatLogic:
         self.rotation_enabled = None
         self.task = task
         self._normal_attack_hold_enabled = False
-        self._normal_attack_mouse_is_down = False
 
     def _sync_normal_attack_hold(self):
         should_hold = self._normal_attack_hold_enabled
-        if should_hold == self._normal_attack_mouse_is_down:
+        is_down = bool(win32api.GetKeyState(0x01) & 0x8000)
+        if should_hold == is_down:
             return
         if should_hold:
             pyautogui.mouseDown()
         else:
             pyautogui.mouseUp()
-        self._normal_attack_mouse_is_down = should_hold
 
     def run(self, start_sleep: float = None, no_battle: bool = False):
         self._last_exit_check_time = 0
