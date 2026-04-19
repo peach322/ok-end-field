@@ -1,27 +1,37 @@
 import time
 import threading
 import pyautogui
-from src.tasks.BaseEfTask import BaseEfTask
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.tasks.BaseEfTask import BaseEfTask
 
 
 class AutoCombatLogic:
 
-    def __init__(self, task: BaseEfTask):
+    def __init__(self, task: "BaseEfTask"):
         self.rotation_active = None
         self.skill_sequence = None
         self.rotation_enabled = None
         self.task = task
         self._normal_attack_hold_enabled = False
+        self._normal_attack_mouse_is_down = False
 
     def _sync_normal_attack_hold(self):
-        if self._normal_attack_hold_enabled:
+        should_hold = self._normal_attack_hold_enabled
+        if should_hold == self._normal_attack_mouse_is_down:
+            return
+        if should_hold:
             pyautogui.mouseDown()
         else:
             pyautogui.mouseUp()
+        self._normal_attack_mouse_is_down = should_hold
 
     def run(self, start_sleep: float = None, no_battle: bool = False):
         self._last_exit_check_time = 0
         self._exit_check_interval = 0.5
+        self._normal_attack_hold_enabled = False
+        self._sync_normal_attack_hold()
         task = self.task
         if not task.in_combat(required_yellow=1):
             now = time.time()
@@ -59,6 +69,7 @@ class AutoCombatLogic:
             task.sleep(0.1)
             task.click(key="middle")
             self._normal_attack_hold_enabled = True
+            self._sync_normal_attack_hold()
             if start_sleep is not None:
                 time.sleep(start_sleep)
             else:
@@ -84,7 +95,6 @@ class AutoCombatLogic:
                         break
                 if no_battle:
                     self._normal_attack_hold_enabled = False
-                    self._sync_normal_attack_hold()
                     task.sleep(0.5)
                     continue
                 task.approach_enemy()
