@@ -2,11 +2,12 @@ import time
 import threading
 import pyautogui
 import win32api
+from src.tasks.BaseEfTask import BaseEfTask
 
 
 class AutoCombatLogic:
 
-    def __init__(self, task):
+    def __init__(self, task: BaseEfTask):
         self.rotation_active = None
         self.skill_sequence = None
         self.rotation_enabled = None
