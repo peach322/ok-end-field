@@ -2,15 +2,11 @@ import time
 import threading
 import pyautogui
 import win32api
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from src.tasks.BaseEfTask import BaseEfTask
 
 
 class AutoCombatLogic:
 
-    def __init__(self, task: "BaseEfTask"):
+    def __init__(self, task):
         self.rotation_active = None
         self.skill_sequence = None
         self.rotation_enabled = None
