@@ -89,7 +89,6 @@ class AutoCombatLogic:
                             task.screenshot("out_of_combat")
                         task.log_info("自动战斗结束!", notify=task.config.get("后台结束战斗通知") and task.in_bg())
                         task.log_info("退出战斗主循环")
-                        self._end = True
                         self._normal_attack_hold_enabled = False
                         self._sync_normal_attack_hold()
                         break
