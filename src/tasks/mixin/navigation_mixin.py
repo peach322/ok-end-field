@@ -342,6 +342,7 @@ class NavigationMixin(BaseEfTask):
                 # cy = int(self.height * 0.5)
                 for _ in range(6):
                     # self.scroll(cx, cy, 8)
+                    # 20 在实测中放大幅度偏小，提升到 80 以便更快拉近视角提高对中可见性
                     pyautogui.scroll(80)
                     self.sleep(1)
         if raise_if_fail:
