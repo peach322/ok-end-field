@@ -421,7 +421,7 @@ class LiaisonMixin(NavigationMixin):
         return True
 
     def _gift_action_box(self):
-        return self.box_of_screen(1434 / 1920, 0.5, 1, 872 / 1080)
+        """返回联络界面礼物操作区域（收下/赠送按钮所在的 Box）。"""
 
     def _finish_collect_gift_after_clicked(self):
         """在已点击『收下』后，完成收礼弹窗流程。"""
@@ -514,7 +514,7 @@ class LiaisonMixin(NavigationMixin):
         return self.give_gifts(timeout=30, gift_entry_clicked=True)
 
     def _loop_wait_click_ocr(self, match, box, timeout, log_msg=None):
-        start_time = time.time()
+        """在 timeout 内循环点击屏幕中心并等待目标文本出现后点击，超时返回 None。"""
 
         while True:
             if time.time() - start_time > timeout:

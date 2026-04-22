@@ -12,7 +12,7 @@ from src.tasks.mixin.runtime_mixin import RuntimeMixin
 
 
 def back_window(prev):
-    current = win32gui.GetForegroundWindow()
+    """若当前前台窗口不是 prev，则将 prev 恢复为前台窗口。"""
 
     if prev and win32gui.IsWindow(prev) and current != prev:
         try:
@@ -31,8 +31,7 @@ class BaseEfTask(
     """游戏自动化任务基类，提供通用的交互和识别功能。"""
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._logged_in = False  # 记录是否已登录游戏
+        """初始化任务基类，绑定屏幕位置、热键配置及 YOLOv8 检测器。"""  # 记录是否已登录游戏
         self.current_user = ""  # 记录当前用户
         self.current_account_id = ""  # 记录当前账号稳定ID（优先用于账号覆盖）
         self.support_multi_account = False  # 明确标识该任务是否支持多账号执行逻辑

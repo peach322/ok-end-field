@@ -158,7 +158,7 @@ class Common(BaseEfTask):
             # OCR失败时默认返回最大值
             return 0
     def plus_max(self):
-        for plus_button in [fL.plus_button, fL.market_plus_button]:
+        """找到加号/市场加号按钮并偏移点击，将数量调至最大，找不到返回 False。"""
             plus_button = self.find_one(feature_name=plus_button, box=self.box.bottom_right, threshold=0.8)
             if plus_button:
                 break

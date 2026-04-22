@@ -12,44 +12,45 @@ class ScreenPosition:
     """
 
     def __init__(self, parent):
+        """接收带有 .width 和 .height 属性的父对象，用于生成各区域 Box。"""
         self.parent = parent  # parent 必须有 .width 和 .height
 
     # ---------- 固定位置 ----------
     @property
     def top_left(self) -> Box:
-        return Box(x=0, y=0, to_x=self.parent.width // 2, to_y=self.parent.height // 2)
+        """屏幕左上四分之一区域。"""
 
     @property
     def top_right(self) -> Box:
-        return Box(x=self.parent.width // 2, y=0, to_x=self.parent.width, to_y=self.parent.height // 2)
+        """屏幕右上四分之一区域。"""
 
     @property
     def bottom_left(self) -> Box:
-        return Box(x=0, y=self.parent.height // 2, to_x=self.parent.width // 2, to_y=self.parent.height)
+        """屏幕左下四分之一区域。"""
 
     @property
     def bottom_right(self) -> Box:
-        return Box(x=self.parent.width // 2, y=self.parent.height // 2, to_x=self.parent.width, to_y=self.parent.height)
+        """屏幕右下四分之一区域。"""
 
     @property
     def left(self) -> Box:
-        return Box(x=0, y=0, to_x=self.parent.width // 2, to_y=self.parent.height)
+        """屏幕左半区域。"""
 
     @property
     def right(self) -> Box:
-        return Box(x=self.parent.width // 2, y=0, to_x=self.parent.width, to_y=self.parent.height)
+        """屏幕右半区域。"""
 
     @property
     def top(self) -> Box:
-        return Box(x=0, y=0, to_x=self.parent.width, to_y=self.parent.height // 2)
+        """屏幕上半区域。"""
 
     @property
     def bottom(self) -> Box:
-        return Box(x=0, y=self.parent.height // 2, to_x=self.parent.width, to_y=self.parent.height)
+        """屏幕下半区域。"""
 
     @property
     def center(self) -> Box:
-        return Box(x=self.parent.width // 4, y=self.parent.height // 4,
+        """屏幕中心四分之一区域（去除四边各 1/4）。"""
                    to_x=self.parent.width * 3 // 4, to_y=self.parent.height * 3 // 4)
 
     # ---------- 战斗UI按键映射 (基于COCO标注 @ 3840x2160) ----------

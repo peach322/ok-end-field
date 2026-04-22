@@ -4,7 +4,7 @@ from src.tasks.account.account_scope_store import resolve_account_id
 
 class AccountMixin(LoginMixin):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        """初始化多账号混入，注入账号列表、多账号模式与独立配置等默认配置项。"""
         self.default_config.update({
             "多账户模式": False,
             "多账户独立配置": False,
@@ -26,7 +26,7 @@ class AccountMixin(LoginMixin):
         })
 
     def get_account_list(self):
-        account_str = self.config.get("账号列表", "")
+        """解析账号列表配置文本，返回包含 account_id/username/password 的字典列表。"""
         account_list = []
 
         if not account_str:

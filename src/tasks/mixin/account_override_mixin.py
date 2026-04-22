@@ -7,21 +7,21 @@ class AccountOverrideMixin:
     """按账号上下文读取任务配置覆盖。"""
 
     def _bind_account_aware_config_get(self):
-        cfg = getattr(self, "config", None)
+        """将 config.get 替换为带账号覆盖的版本（每次设置账号后调用一次）。"""
         if cfg is None or getattr(cfg, "_account_get_patched", False):
             return
 
         raw_get = cfg.get
 
         def _patched_get(config_obj, key, default=None):
-            return self._config_get_with_account_override(key, default, raw_get)
+            """config.get 的补丁版，透明注入账号覆盖逻辑。"""
 
         cfg._raw_get = raw_get
         cfg.get = MethodType(_patched_get, cfg)
         cfg._account_get_patched = True
 
     def _raw_cfg_get(self, key, default=None):
-        cfg = getattr(self, "config", None)
+        """绕过账号覆盖逻辑，直接读取 config 原始值。"""
         if cfg is None:
             return default
 
@@ -32,7 +32,7 @@ class AccountOverrideMixin:
         return dict.get(cfg, key, default)
 
     def _is_account_override_enabled(self):
-        cfg = getattr(self, "config", None)
+        """检查「多账户独立配置」开关是否已开启，无开关时默认允许。"""
         if cfg is None:
             return False
 
@@ -43,7 +43,7 @@ class AccountOverrideMixin:
 
     @staticmethod
     def _coerce_override_value(base_value, override_value):
-        if base_value is None or override_value is None:
+        """将覆盖值强制转换为与 base_value 相同的类型，转换失败时保留原值。"""
             return override_value
 
         if isinstance(base_value, bool):
@@ -91,7 +91,7 @@ class AccountOverrideMixin:
         return base_value
 
     def _config_get_with_account_override(self, key, default, raw_get):
-        base_value = raw_get(key, default)
+        """读取配置项，若账号覆盖已启用且有覆盖值则返回覆盖值，否则返回原值。"""
 
         if not self._is_account_override_enabled():
             return base_value
@@ -109,4 +109,4 @@ class AccountOverrideMixin:
         return self._coerce_override_value(base_value, account_overrides.get(key))
 
     def cfg_get(self, key, default=None):
-        return self._config_get_with_account_override(key, default, self._raw_cfg_get)
+        """显式使用账号覆盖逻辑读取配置，绕过 config.get 补丁机制直接调用。"""

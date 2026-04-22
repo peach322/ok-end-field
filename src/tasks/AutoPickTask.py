@@ -13,7 +13,7 @@ logger = Logger.get_logger(__name__)
 class AutoPickTask(BaseEfTask, TriggerTask):
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        """初始化自动拾取任务，配置白名单与黑名单物品集合。"""
         self.name = "自动拾取"
         self.description = "大世界自动拾取"
         self.icon = FluentIcon.SHOPPING_CART
@@ -28,7 +28,7 @@ class AutoPickTask(BaseEfTask, TriggerTask):
         }
 
     def run(self):
-        if self.in_combat_world():
+        """触发式主循环：在大世界战斗中检测 F 键图标，根据物品类型决定是否自动拾取。"""
             while button_f := self.find_f():
                 text_zone = button_f.copy(x_offset=button_f.width * 6, width_offset=button_f.width * 12,
                                           y_offset=-button_f.height, height_offset=button_f.height * 12)
@@ -69,7 +69,7 @@ class AutoPickTask(BaseEfTask, TriggerTask):
                 self.sleep(0.2)
 
     def pick(self, count=1):
-        for _ in range(count):
+        """按 F 键拾取 count 次。"""
             self.press_key('f', after_sleep=0.1)
 
 
@@ -87,7 +87,7 @@ gray_color = {
 
 
 def is_mostly_grayscale(frame, threshold=10):
-    b, g, r = cv2.split(frame)
+    """计算帧图像中灰色像素（RGB 通道差值均低于 threshold）所占比例。"""
     diff_rg = cv2.absdiff(r, g)
     diff_gb = cv2.absdiff(g, b)
     diff_br = cv2.absdiff(b, r)

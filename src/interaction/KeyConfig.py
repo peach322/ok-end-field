@@ -68,7 +68,7 @@ class KeyConfigManager:
         self.key_config = key_config or {}
 
     def resolve_key(self, key: str, key_type: str = 'common') -> str:
-        config_key_name = None
+        """将游戏默认键映射为用户配置的自定义键，找不到映射时原样返回。"""
 
         default_map = type_to_key_map.get(key_type, {})
 

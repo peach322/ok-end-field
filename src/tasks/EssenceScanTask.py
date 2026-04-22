@@ -60,7 +60,7 @@ _DEFAULT_MAX_PAGES: Final = 200
 
 
 def _parse_xy(value, default: tuple[int, int]) -> tuple[int, int]:
-    dx, dy = int(default[0]), int(default[1])
+    """从列表、元组或 "x,y" 字符串中解析整数坐标对，解析失败时返回 default。"""
 
     if isinstance(value, (list, tuple)) and len(value) >= 2:
         try:
@@ -96,17 +96,15 @@ class EssenceScanSettings:
 
     @classmethod
     def from_task(cls, task: "EssenceScanTask") -> "EssenceScanSettings":
-        config = getattr(task, "config", {}) or {}
+        """从任务 config 中读取所有扫描参数，返回 EssenceScanSettings 实例。"""
 
         def get_int(key, default):
-            try:
-                return int(config.get(key, default))
+            """从 config 安全读取整数，转换失败时返回 default。"""
             except (TypeError, ValueError):
                 return default
 
         def get_float(key, default):
-            try:
-                return float(config.get(key, default))
+            """从 config 安全读取浮点数，转换失败时返回 default。"""
             except (TypeError, ValueError):
                 return default
 
@@ -159,7 +157,7 @@ class EssenceScanStats:
     new_locked_weapons: set[str] = field(default_factory=set)
 
     def update_info(self, task: "EssenceScanTask") -> None:
-        task.info_set(_INFO_SCANNED, str(self.scanned))
+        """将当前统计数据写入任务状态面板。"""
         task.info_set(_INFO_GRADUATED_ESSENCE, str(self.graduated))
         task.info_set(_INFO_LOCK_SUCCESS, str(self.lock_success))
         task.info_set(_INFO_LOCK_SKIPPED, str(self.lock_skipped))
@@ -175,8 +173,7 @@ class EssenceScanTask(BaseEfTask):
     """
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.name = "毕业基质识别"
+        """初始化毕业基质识别任务，注入扫描参数默认值与配置描述。"""
         self.description = "遍历武器基质列表，匹配 weapon_data.csv 并处理毕业基质上锁"
         self.icon = FluentIcon.SEARCH
         # 该 output 文本框默认会显示在“开始”按钮同一行，观感较差；此任务用实时日志 + 状态栏即可。
@@ -209,7 +206,7 @@ class EssenceScanTask(BaseEfTask):
         )
 
     def _ref_box(self, settings: EssenceScanSettings, x1: float, y1: float, x2: float, y2: float, *, name: str):
-        ref_w, ref_h = settings.ref_resolution
+        """将参考分辨率坐标转换为屏幕相对 Box。"""
         return self.box_of_screen(
             x1 / ref_w,
             y1 / ref_h,
@@ -219,17 +216,17 @@ class EssenceScanTask(BaseEfTask):
         )
 
     def _click_ref(self, settings: EssenceScanSettings, x: float, y: float, *, after_sleep: float = 0.0):
-        ref_w, ref_h = settings.ref_resolution
+        """以参考分辨率坐标点击屏幕，内部转为相对坐标后居中点击。"""
         self.click(x / ref_w, y / ref_h, hcenter=True, vcenter=True, after_sleep=after_sleep)
 
     def _has_feature(self, feature_name: str, *, box=None, threshold: float = 0.0) -> bool:
-        try:
+        """检查指定特征是否存在，异常时返回 False。"""
             return self.find_one(feature_name, box=box, threshold=threshold) is not None
         except Exception:
             return False
 
     def _find_first_feature(self, feature_names: tuple[str, ...], *, box=None, threshold: float = 0.0):
-        for feature_name in feature_names:
+        """在特征名列表中返回第一个能找到的 Box，全部未命中时返回 None。"""
             if self._has_feature(feature_name, box=box, threshold=threshold):
                 found = self.find_one(feature_name, box=box, threshold=threshold)
                 if found:
@@ -237,11 +234,11 @@ class EssenceScanTask(BaseEfTask):
         return None
 
     def _in_essence_ui(self) -> bool:
-        self.next_frame()
+        """判断当前是否处于武器基质 UI 界面。"""
         return self._has_feature(_FEATURE_ESSENCE_UI_MARKER, threshold=_ESSENCE_UI_THRESHOLD)
 
     def _lock_icon_box(self, settings: EssenceScanSettings, lock_x: int, lock_y: int):
-        hs = _LOCK_ICON_HALF_SIZE
+        """以锁按钮坐标为中心生成固定大小的 Box，用于锁图标识别。"""
         return self._ref_box(settings, lock_x - hs, lock_y - hs, lock_x + hs, lock_y + hs, name="essence_lock_icon")
 
     def _lock_state(self, settings: EssenceScanSettings, lock_x: int, lock_y: int) -> LockState:
@@ -313,10 +310,10 @@ class EssenceScanTask(BaseEfTask):
         return False, True
 
     def _try_lock(self, settings, lock_x, lock_y):
-        return self._toggle_lock(settings, lock_x, lock_y, LockState.LOCKED)
+        """尝试将锁切换到已锁状态，返回 (state_ok, did_toggle)。"""
 
     def _try_unlock(self, settings, lock_x, lock_y):
-        return self._toggle_lock(settings, lock_x, lock_y, LockState.UNLOCKED)
+        """尝试将锁切换到已解锁状态，返回 (state_ok, did_toggle)。"""
 
     def _try_throw_away(self) -> tuple[bool, bool]:
         """
@@ -348,13 +345,13 @@ class EssenceScanTask(BaseEfTask):
         return False, True
 
     def _is_gold_cell(self, cell_box) -> bool:
-        for feature_name in _FEATURE_ESSENCE_QUALITY_GOLD:
+        """判断指定格子图标是否为金色品质基质。"""
             if self._has_feature(feature_name, box=cell_box, threshold=_ESSENCE_QUALITY_THRESHOLD):
                 return True
         return False
 
     def _scroll_next_page(self, settings: EssenceScanSettings):
-        grid_x, grid_y = settings.grid_origin
+        """向上滚动鼠标以翻到下一页基质列表。"""
         dx, dy = settings.grid_step
         cols = settings.grid_cols
         rows = settings.grid_rows
@@ -375,7 +372,7 @@ class EssenceScanTask(BaseEfTask):
         self.wait_ui_stable()
 
     def run(self):
-        # 只保留该任务需要展示的 info keys，避免旧版本遗留字段出现在状态栏
+        """执行基质扫描主流程：逐格点击识别，匹配毕业词条后上锁/解锁/弃置。"""
         info = getattr(self, "info", None)
         if isinstance(info, dict):
             info.clear()

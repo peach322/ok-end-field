@@ -21,11 +21,10 @@ class RECT(ctypes.Structure):
 class EfInteraction(PostMessageInteraction):
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.cursor_position = None
+        """初始化交互实例，记录鼠标位置用于激活后恢复。"""
 
     def click(self, x=-1, y=-1, move_back=False, name=None, down_time=0.001, move=True, key="left"):
-        self.try_activate()
+        """向窗口发送鼠标点击消息，支持左键/中键/右键，点击后恢复鼠标原始位置。"""
         move_Cursor = False
         if x < 0:
             click_pos = win32api.MAKELONG(round(self.capture.width * 0.5), round(self.capture.height * 0.5))
@@ -58,13 +57,13 @@ class EfInteraction(PostMessageInteraction):
             SetCursorPos(self.cursor_position)
 
     def send(self, msg, wparam, lparam):
-        win32gui.SendMessage(self.hwnd, msg, wparam, lparam)
+        """以 SendMessage 方式向当前窗口句柄发送 Win32 消息（同步）。"""
 
     def activate(self):
-        self.send(win32con.WM_ACTIVATE, win32con.WA_ACTIVE, 0)
+        """向窗口发送 WM_ACTIVATE 消息以激活窗口。"""
 
     def try_activate(self):
-        if not self.activated:
+        """若窗口未处于前台则激活，并调用 try_unclip 解除鼠标锁定。"""
             if not self.hwnd_window.is_foreground():
                 self.activated = True
                 self.cursor_position = GetCursorPos()
@@ -73,7 +72,7 @@ class EfInteraction(PostMessageInteraction):
         self.try_unclip()
 
     def try_unclip(self):
-        try:
+        """检测鼠标是否被游戏锁定，若被限制则调用 ClipCursor(0) 解除并恢复位置。"""
             # 只有在窗口存在、处于后台且有历史坐标时才进行检查
             if not self.hwnd_window.is_foreground():
                 rect = RECT()

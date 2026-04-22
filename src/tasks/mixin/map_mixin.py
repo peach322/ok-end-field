@@ -55,6 +55,7 @@ class MapMixin(BaseEfTask):
         # 执行附近传送点传送
         return self.to_near_transfer_point(test_target_box)
     def clear_icon_in_map(self, need_reserve_icon_name=None):
+        """在地图标记管理界面清空所有图标选中，并可选保留一个指定图标。"""
         # 打开“标记显示管理”
         if not self.wait_click_ocr(
             match="标记显示管理", box=self.box.bottom_left, time_out=10, log=True, after_sleep=2

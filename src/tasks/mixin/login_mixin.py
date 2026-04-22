@@ -83,7 +83,7 @@ class LoginMixin(BaseEfTask):
         if not self._confirm_logged_in():
             raise RuntimeError("登录失败")
     def _confirm_logged_in(self, time_out=120):
-        start_time = time.time()
+        """在超时时间内等待登出按钮出现来确认登录成功，返回布尔值。"""
         while time.time() - start_time < time_out:
             result = self.find_feature(feature_name=fL.logout)
             if result:
@@ -102,7 +102,7 @@ class LoginMixin(BaseEfTask):
         pyperclip.copy(text)
         pyautogui.hotkey("ctrl", "v")
     def click_text(self, text):
-        start_time = time.time()
+        """在登录界面 OCR 识别目标文本并持续点击，直至文本消失或确认进入登录页。"""
         result = None
         one_ok = False
         while time.time() - start_time < 60:

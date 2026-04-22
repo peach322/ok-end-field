@@ -9,6 +9,7 @@ class EndCommandMixin:
     """结尾外部命令能力。"""
 
     def add_end_command_config(self, *, enable_description="是否在任务末尾执行一次外部命令行程序。", command_description=None):
+        """向 default_config 和 config_description 中注入结尾外部命令相关配置项。"""
         if command_description is None:
             command_description = (
                 "需要执行的命令行内容。\n"
@@ -35,7 +36,7 @@ class EndCommandMixin:
         )
 
     def launch_end_command_non_blocking(self):
-        command = str(self.config.get("结尾外部命令", "")).strip()
+        """读取配置并启动结尾外部命令，支持等待退出和检测已运行两种模式。"""
         if not command:
             self.log_info("结尾外部命令为空，跳过执行")
             return True
@@ -94,7 +95,7 @@ class EndCommandMixin:
             return False
 
     def _is_end_command_running(self, command_args):
-        if not command_args:
+        """检查 command_args 所描述的进程是否已在运行，兼容 Python 脚本启动场景。"""
             return False
 
         target_exec = self._normalize_process_token(command_args[0])
@@ -136,4 +137,4 @@ class EndCommandMixin:
 
     @staticmethod
     def _normalize_process_token(value):
-        return os.path.basename(str(value).strip().strip("\"'")).lower()
+        """将路径或参数字符串规范化为小写文件名，用于进程名匹配。"""

@@ -282,7 +282,7 @@ def run_at_window_pos(hwnd, func, x, y, sleep_time=0.5, *args, **kwargs):
 
 
 def run_in_window(hwnd, func, *args, **kwargs):
-    prev = win32gui.GetForegroundWindow()
+    """切换至目标窗口执行 func，完成后自动将前台还原至之前的窗口。"""
     need_restore = prev != hwnd
 
     try:

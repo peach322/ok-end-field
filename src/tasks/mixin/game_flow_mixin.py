@@ -14,13 +14,13 @@ class GameFlowMixin:
     """登录弹窗、主界面状态与场景导航流程能力。"""
 
     def login_screenshot(self):
-        self.active_and_send_mouse_delta(0, 0, activate=True, only_activate=True)
+        """激活游戏窗口并通过屏幕截图方式捕获当前帧，用于登录界面识别。"""
         self.sleep(0.1)
         return capture_window_by_screen(self.hwnd.hwnd)
 
     def login_ocr(self, x=0, y=0, to_x=1, to_y=1, match=None, width=0, height=0, box=None, name=None, threshold=0,
                   target_height=0, use_grayscale=False, log=False, frame_processor=None, lib='default'):
-        img = self.login_screenshot()
+        """使用登录截图帧执行 OCR 识别，用于窗口未置顶时的文字识别。"""
 
         if not isinstance(img, np.ndarray):
             img = np.array(img)
@@ -48,7 +48,7 @@ class GameFlowMixin:
                            canny_lower=0, canny_higher=0, frame_processor=None, template=None,
                            match_method=cv2.TM_CCOEFF_NORMED, screenshot=False, mask_function=None, frame=None,
                            limit=0, target_height=0):
-        img = self.login_screenshot()
+        """使用登录截图帧执行特征匹配，用于窗口未置顶时的图像识别。"""
         frame = img if isinstance(img, np.ndarray) else np.array(img)
         return super().find_feature(
             feature_name,
@@ -238,7 +238,7 @@ class GameFlowMixin:
         return False
 
     def run_ocr_rules(self, rules: list[list]) -> bool:
-        for need, need_box, match, box in rules:
+        """遍历规则列表，匹配条件后点击目标文本并返回 False，全部不命中时返回 True。"""
             if need is not None:
                 if not self.ocr(match=need, box=need_box, log=True):
                     continue

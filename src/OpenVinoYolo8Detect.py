@@ -12,6 +12,7 @@ logger = Logger.get_logger(__name__)
 class OpenVinoYolo8Detect:
 
     def __init__(self, weights='echo.onnx', model_h=640, model_w=640, iou_thres=0.45):
+        """初始化 OpenVINO YOLOv8 检测器，优先使用 NPU，不可用时退回 CPU。"""
         self.dic_labels = {0: "battle_end"}
         self.weights = weights
         self.model_size = (model_w, model_h)
@@ -57,6 +58,7 @@ class OpenVinoYolo8Detect:
             raise RuntimeError("Could not initialize OpenVINO model") from e
 
     def letterbox(self, img: np.ndarray, new_shape: Tuple[int, int] = (640, 640)) -> Tuple[np.ndarray, Tuple[int, int]]:
+        """等比例缩放图像并用灰边填充至目标尺寸，返回处理后图像及填充偏移量 (top, left)。"""
         shape = img.shape[:2]
 
         r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
@@ -73,6 +75,7 @@ class OpenVinoYolo8Detect:
         return img, (top, left)
 
     def _preprocess(self, img):
+        """将 BGR 图像转换为模型输入张量，返回 (image_data, pad)。"""
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
         img, pad = self.letterbox(img, (self.input_width, self.input_height))
@@ -84,6 +87,7 @@ class OpenVinoYolo8Detect:
         return image_data, pad
 
     def _postprocess(self, outputs, padding, orig_shape, confidence_threshold, label):
+        """解析模型输出，执行 NMS 过滤并将坐标映射回原始图像，返回 Box 列表。"""
         outputs = np.transpose(np.squeeze(outputs[0]))
 
         gain = min(self.input_height / orig_shape[0], self.input_width / orig_shape[1])
@@ -129,6 +133,7 @@ class OpenVinoYolo8Detect:
         return results
 
     def detect(self, image, threshold=0.7, label=-1):
+        """对输入图像执行目标检测，返回按坐标排序的 Box 列表；出错时返回 None。"""
         try:
             h, w = image.shape[:2]
             img_data, pad = self._preprocess(image)

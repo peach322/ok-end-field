@@ -377,7 +377,7 @@ class BattleMixin(BaseEfTask):
         return count
 
     def check_is_pure_color_in_4k(self, x1, y1, x2, y2, color_range=None, threshold=0.9):
-        skill_area_box = self.box_of_screen_scaled(3840, 2160, x1, y1, x2, y2)
+        """检查 4K 坐标区域内是否存在至少两行颜色高度统一的像素行（用于技能槽颜色判断）。"""
         bar = skill_area_box.crop_frame(self.frame)
         if bar.size == 0:
             return False
@@ -440,7 +440,7 @@ class BattleMixin(BaseEfTask):
 
 
 def has_rectangles(frame):
-    if frame is None:
+    """检测帧中是否存在宽度大于画面 25% 的横向矩形轮廓（用于判断战斗结算 UI）。"""
         return False
 
     original_h, original_w = frame.shape[:2]
@@ -465,7 +465,7 @@ black = np.array([0, 0, 0], dtype=np.uint8)
 
 
 def isolate_white_text_to_black(cv_image):
-    match_mask = cv2.inRange(cv_image, black, lower_white_none_inclusive)
+    """将图像中非白色区域置黑，保留白色文字区域，返回 BGR 格式二值化图像。"""
     output_image = cv2.cvtColor(match_mask, cv2.COLOR_GRAY2BGR)
     return output_image
 

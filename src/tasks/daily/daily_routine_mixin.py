@@ -13,7 +13,7 @@ from src.data.characters_utils import get_contact_list_with_feature_list
 
 class DailyRoutineMixin(LiaisonMixin, Common):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        """初始化日常例行任务，注入收邮件/据点兑换/造装备等功能的默认配置。"""
         self.default_config.update({
             "⭐收邮件": True,
             "⭐据点兑换": True,
@@ -77,7 +77,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
             ),
         })
     def make_simply(self):
-        self.info_set("current_task", "make_simply")
+        """前往基地执行简易制作流程。"""
         self.transfer_to_home_point(should_check_out_boat=True)
         self.press_key("b")
         self.wait_click_ocr(match=[re.compile("简易"),re.compile("制作")], box=self.box.top_right, time_out=5)
@@ -86,7 +86,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
         self.wait_pop_up()
 
     def wait_friend_list(self, end_icon_name="friend_chat_icon"):
-        start_time = time.time()
+        """等待好友列表加载完成（以指定图标出现为判断标准），超时返回 False。"""
         while True:
             if time.time() - start_time > 20:
                 self.log_info("加载好友列表超时")
@@ -95,7 +95,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
                 return True
 
     def collect_credit(self):
-        self.info_set("current_task", "collect_credit")
+        """前往信用交易所领取全部帝江号助力信用奖励。"""
         self.press_key("f5")
         self.wait_click_ocr(match=re.compile("信用交易所"), box=self.box.top, time_out=5, recheck_time=1)
         result = self.wait_click_ocr(match=[re.compile("收取信用"), re.compile("无待领取信用")],
@@ -219,8 +219,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
             count += 1
 
     def claim_mail(self):
-        self.info_set("current_task", "claim_delivery_rewards")
-        self.log_info("开始收邮件")
+        """打开邮箱并一键收取全部邮件。"""
         self.press_key("k", after_sleep=2)
         if self.wait_click_ocr(
             x=0, y=0.88,
@@ -234,8 +233,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
         return True
 
     def claim_delivery_rewards(self):
-        self.info_set("current_task", "claim_delivery_rewards")
-        self.log_info("开始领取转交委托奖励")
+        """前往仓储节点领取「我转交的委托」中所有可领取奖励。"""
 
         area = areas_list[0]
         self.to_model_area(area, "仓储节点")
@@ -270,7 +268,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
         self.log_info("转交委托奖励领取任务完成")
 
     def delivery_send_others(self):
-        self.info_set("current_task", "delivery_send_others")
+        """遍历各区域仓储节点，完成货物装箱并转交运送委托。"""
 
         for area in areas_list:
             activity_num = 0
@@ -375,7 +373,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
                 self.log_info(f"{area} 已完成 {count}/{activity_num} 次转交")
 
     def read_outpost_ticket_num(self, outpost_name):
-        num_str = self.wait_ocr(
+        """OCR 识别当前据点剩余可兑换调度券数量，识别失败返回 0。"""
             match=re.compile(r"\d+"),
             box=self.box_of_screen(
                 1224 / 1920,
@@ -444,7 +442,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
                 break
 
             def priority_score(name):
-                for i, p in enumerate(priority_list):
+                """根据优先序列返回货品排序分值，序列外的货品分值最低。"""
                     if re.search(p, name):
                         return i
                 return len(priority_list)
@@ -520,11 +518,11 @@ class DailyRoutineMixin(LiaisonMixin, Common):
         self.log_info(f"{outpost_name} 兑换操作完成")
 
     def test_ocr_full(self):
-        self.next_frame()
+        """对整个屏幕执行一次 OCR 并记录日志，用于调试。"""
         self.ocr(log=True)
 
     def test_ocr(self):
-        box1 = self.box_of_screen(1749 / 1920, 107 / 1080, 1789 / 1920, 134 / 1080)
+        """识别固定区域的「x/5」格式文本并点击，用于帝江号助力数量测试。"""
         box2 = self.box_of_screen(
             (1749 + (1832 - 1750)) / 1920, 107 / 1080, (1789 + (1832 - 1750)) / 1920, 134 / 1080
         )
@@ -544,7 +542,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
         )
 
     def exchange_outpost_goods(self):
-        self.info_set("current_task", "exchange_outpost_goods")
+        """遍历所有区域的据点，按优先序列兑换调度券。"""
         self.log_info("开始据点兑换任务")
 
         priority_list = parse_sequence(self.config.get("交易货品优先序列", ""))
@@ -569,7 +567,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
         self.log_info("据点兑换任务完成")
 
     def make_weapon(self):
-        self.info_set("current_task", "make_weapon")
+        """在装备制造界面点击制作列表首位装备。"""
         self.log_info("开始造装备任务")
 
         self.back()
@@ -598,7 +596,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
         return True
 
     def _click_ocr_with_info(self, match_str, box, time_out=5, after_sleep=2):
-        if not self.wait_click_ocr(
+        """等待并点击 OCR 目标文本，找不到时记录日志并返回 False。"""
                 match=re.compile(match_str),
                 box=box,
                 time_out=time_out,
@@ -611,8 +609,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
         return True
 
     def claim_weekly_rewards(self):
-        self.info_set("current_task", "claim_daily_rewards")
-        self.log_info("开始领取每周事务")
+        """打开活动中心，领取「每周事务」奖励。"""
 
         self.sleep(2)
         self.press_key("f7", after_sleep=2)
@@ -632,8 +629,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
         return True
 
     def claim_daily_rewards(self):
-        self.info_set("current_task", "claim_daily_rewards")
-        self.log_info("开始领取日常奖励任务")
+        """领取行动手册日常奖励及通行证任务/奖励。"""
 
         # 行动手册/日常
 
@@ -724,7 +720,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
 
         return True
     def boat_claim_rewards(self):
-        self.enter_home_room_list()
+        """进入基地房间列表，依次执行收集线索与提升制造舱数量。"""
         exchange_help_box = self.box_of_screen(0.1, 561 / 861, 0.9, 0.9)
         ok_bool_clue=True
         ok_up_room=True
@@ -742,7 +738,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
         return False
 
     def collect_clue(self, exchange_help_box):
-        if not self.config.get("收集线索"):
+        """进入会客室收集线索并尝试开展情报交流，完成后返回。"""
             self.logger.info("收集线索任务未启用，跳过")
             return True
         if self.wait_click_ocr(match=re.compile("会客室"), time_out=6, box=exchange_help_box):
@@ -791,7 +787,7 @@ class DailyRoutineMixin(LiaisonMixin, Common):
             return False
 
     def up_make_room_num(self, exchange_help_box):
-        if not self.config.get("制造舱"):
+        """进入制造舱收取材料并补足待制造数量。"""
             self.logger.info("制造舱助力任务未启用，跳过")
             return True
         results = self.wait_ocr(match=re.compile("制造"), time_out=4, box=exchange_help_box)

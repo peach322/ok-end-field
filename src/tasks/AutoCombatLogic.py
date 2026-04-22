@@ -7,21 +7,21 @@ from src.tasks.BaseEfTask import BaseEfTask
 class AutoCombatLogic:
 
     def __init__(self, task: BaseEfTask):
-        self.rotation_active = None
+        """接收宿主任务对象，初始化技能序列与普通攻击状态。"""
         self.skill_sequence = None
         self.rotation_enabled = None
         self.task = task
         self._normal_attack_hold_enabled = False
 
     def _sync_normal_attack_hold(self):
-        if self._normal_attack_hold_enabled:
+        """根据普通攻击保持开关同步鼠标按下/抬起状态。"""
             self.task.active_and_send_mouse_delta(activate=True,only_activate=True)
             pyautogui.mouseDown()
         else:
             pyautogui.mouseUp()
 
     def run(self, start_sleep: float = None, no_battle: bool = False):
-        self._last_exit_check_time = 0
+        """执行战斗主循环：检测战斗状态后按技能序列释放技能，返回是否完成一轮战斗。"""
         self._exit_check_interval = 0.5
         task = self.task
         if not task.in_combat(required_yellow=1):
