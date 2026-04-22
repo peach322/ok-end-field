@@ -30,6 +30,10 @@ def get_goods_by_outpost_name(outpost_name: str) -> list[str]:
 
 
 def get_stage_category(stage_name):
+    """
+    根据关卡名称返回所属关卡分类。
+    未命中时返回 None。
+    """
     for category, stages in stages_dict.items():
         if stage_name in stages:
             return category

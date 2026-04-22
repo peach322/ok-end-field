@@ -3,6 +3,10 @@ from src.data.FeatureList import FeatureList
 
 
 def get_contact_list_with_feature_list() -> dict[str, str]:
+    """
+    从角色数据与 FeatureList 交集构建“中文名 -> 联络特征名”映射。
+    仅返回在 FeatureList 中存在对应图片资源的角色。
+    """
     feature_set = {f.value for f in FeatureList}  # 取 FeatureList 枚举的所有值
 
     en_to_zh = {info["en"] + "_contact": info["zh"] for info in characters.values()}

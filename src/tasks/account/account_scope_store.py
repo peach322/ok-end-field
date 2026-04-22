@@ -19,14 +19,17 @@ _CACHE_DATA: Dict[str, Any] = copy.deepcopy(_EMPTY_STORE)
 
 
 def get_store_path() -> str:
+    """返回账号作用域覆盖配置文件路径。"""
     return _STORE_PATH
 
 
 def _new_store() -> Dict[str, Any]:
+    """创建一份新的默认存储结构副本。"""
     return copy.deepcopy(_EMPTY_STORE)
 
 
 def _clean_text(value: Any) -> str:
+    """将任意值规范为字符串，None 转为空字符串。"""
     if value is None:
         return ""
     if isinstance(value, str):
@@ -35,10 +38,12 @@ def _clean_text(value: Any) -> str:
 
 
 def _clean_username(value: Any) -> str:
+    """规范化账号名并去除首尾空白。"""
     return _clean_text(value).strip()
 
 
 def _parse_account_list_text_internal(account_list_text: Any) -> Tuple[List[Dict[str, str]], List[str]]:
+    """解析账号列表文本，返回有效账号项与非法行。"""
     entries: List[Dict[str, str]] = []
     invalid_lines: List[str] = []
 
@@ -67,11 +72,13 @@ def _parse_account_list_text_internal(account_list_text: Any) -> Tuple[List[Dict
 
 
 def parse_account_list_text(account_list_text: Any) -> List[Dict[str, str]]:
+    """对外暴露的账号列表解析接口，仅返回有效账号项。"""
     entries, _ = _parse_account_list_text_internal(account_list_text)
     return entries
 
 
 def _normalize_registry(raw_registry: Any) -> Dict[str, Dict[str, Any]]:
+    """规范化 account_registry 结构并清理非法数据。"""
     if not isinstance(raw_registry, dict):
         return {}
 
@@ -113,6 +120,7 @@ def _normalize_registry(raw_registry: Any) -> Dict[str, Dict[str, Any]]:
 
 
 def _normalize_accounts_map(raw_accounts: Any) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """规范化 accounts 映射，仅保留合法账号与任务覆盖项。"""
     if not isinstance(raw_accounts, dict):
         return {}
 
@@ -144,6 +152,7 @@ def _find_account_id_by_username(
     username: str,
     include_aliases: bool = False,
 ) -> str:
+    """按账号名查询 account_id，可选包含别名匹配。"""
     if not username:
         return ""
 
@@ -168,6 +177,7 @@ def _find_account_id_by_username(
 
 
 def _generate_account_id(registry: Dict[str, Dict[str, Any]]) -> str:
+    """生成不与现有 registry 冲突的账号 ID。"""
     while True:
         account_id = f"acc_{uuid.uuid4().hex[:12]}"
         if account_id not in registry:
@@ -179,6 +189,7 @@ def _ensure_registry_entry(
     username: str,
     account_id: str | None = None,
 ) -> str:
+    """确保账号名在 registry 中存在并返回其 account_id。"""
     username = _clean_username(username)
     if not username:
         return ""
@@ -201,6 +212,7 @@ def _ensure_registry_entry(
 
 
 def _merge_task_maps(target: Dict[str, Dict[str, Any]], source: Dict[str, Dict[str, Any]]) -> None:
+    """将 source 任务覆盖项合并到 target。"""
     for task_name, override_map in source.items():
         if task_name not in target:
             target[task_name] = dict(override_map)
@@ -209,6 +221,7 @@ def _merge_task_maps(target: Dict[str, Dict[str, Any]], source: Dict[str, Dict[s
 
 
 def _normalize(data: Any) -> Dict[str, Any]:
+    """规范化整体存储数据，兼容旧键结构并清理异常项。"""
     if not isinstance(data, dict):
         return _new_store()
 
@@ -242,6 +255,7 @@ def _normalize(data: Any) -> Dict[str, Any]:
 
 
 def _sync_account_list_text_on_data(data: Dict[str, Any], text: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """将账号列表文本同步到存储数据并返回变更摘要。"""
     normalized = _normalize(data)
     new_entries, invalid_lines = _parse_account_list_text_internal(text)
 
@@ -286,6 +300,7 @@ def _sync_account_list_text_on_data(data: Dict[str, Any], text: str) -> Tuple[Di
 
 
 def load_overrides(force: bool = False) -> Dict[str, Any]:
+    """读取覆盖配置，支持基于 mtime 的内存缓存。"""
     global _CACHE_MTIME
     global _CACHE_DATA
 
@@ -314,6 +329,7 @@ def load_overrides(force: bool = False) -> Dict[str, Any]:
 
 
 def save_overrides(data: Dict[str, Any]) -> Dict[str, Any]:
+    """规范化并持久化覆盖配置，同时刷新缓存。"""
     global _CACHE_MTIME
     global _CACHE_DATA
 
@@ -331,6 +347,7 @@ def save_overrides(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def sync_account_list_text(text: str) -> Dict[str, Any]:
+    """同步账号列表文本并返回同步摘要。"""
     data = load_overrides(force=True)
     updated, summary = _sync_account_list_text_on_data(data, text if isinstance(text, str) else str(text))
     save_overrides(updated)
@@ -338,6 +355,7 @@ def sync_account_list_text(text: str) -> Dict[str, Any]:
 
 
 def resolve_account_id(username: str, create_if_missing: bool = False) -> str:
+    """根据账号名解析 account_id，可按需自动创建。"""
     account_name = _clean_username(username)
     if not account_name:
         return ""
@@ -354,6 +372,7 @@ def resolve_account_id(username: str, create_if_missing: bool = False) -> str:
 
 
 def get_account_task_overrides(account: str, task_name: str, account_name: str = "") -> Dict[str, Any]:
+    """读取指定账号与任务的覆盖配置。"""
     if not task_name:
         return {}
 
@@ -386,6 +405,7 @@ def get_account_task_overrides(account: str, task_name: str, account_name: str =
 
 
 def _resolve_account_id_for_write(data: Dict[str, Any], account: str) -> str:
+    """写入前解析或创建账号对应的 account_id。"""
     account_key = _clean_username(account)
     if not account_key:
         return ""
@@ -402,6 +422,7 @@ def _resolve_account_id_for_write(data: Dict[str, Any], account: str) -> str:
 
 
 def set_account_task_overrides(account: str, task_name: str, values: Dict[str, Any]) -> None:
+    """设置（或清除）账号在指定任务上的覆盖配置。"""
     if not account or not task_name:
         return
 
@@ -425,6 +446,7 @@ def set_account_task_overrides(account: str, task_name: str, values: Dict[str, A
 
 
 def remove_account_task_overrides(account: str, task_name: str) -> None:
+    """删除账号在指定任务上的覆盖配置。"""
     if not account or not task_name:
         return
 
@@ -446,15 +468,18 @@ def remove_account_task_overrides(account: str, task_name: str) -> None:
 
 
 def list_accounts() -> list[str]:
+    """列出当前存在任务覆盖数据的账号 ID。"""
     data = load_overrides()
     return list((data.get("accounts") or {}).keys())
 
 
 def get_account_list_text() -> str:
+    """读取账号列表原始文本配置。"""
     data = load_overrides()
     value = data.get("account_list_text", "")
     return value if isinstance(value, str) else str(value)
 
 
 def set_account_list_text(text: str) -> None:
+    """写入账号列表文本并触发同步。"""
     sync_account_list_text(text)
