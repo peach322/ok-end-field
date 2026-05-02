@@ -530,7 +530,7 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                     self._battle_is_extra_mode = self._battle_nums_extra_run > 0 and cnt_extra_run < self._battle_nums_extra_run
         return True
 
-    def to_stage(self, stage_name, category_name, reward_tier_override=None, ignore_config_tier=False):
+    def to_stage(self):
         """
         通用关卡进入方法：
         1. 点击左侧类别。
@@ -573,8 +573,8 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                 if enter_bool:
                     return self._switch_stage_reward_tier(
                         stage_name,
-                        reward_tier_override=reward_tier_override,
-                        ignore_config_tier=ignore_config_tier,
+                        reward_tier_override=self._battle_stage_reward_tier_override,
+                        ignore_config_tier=self._battle_ignore_config_reward_tier,
                     )
             self.scroll_relative(650 / 1920, 0.5, count=-2)
             self.wait_ui_stable(refresh_interval=0.5)
@@ -629,8 +629,8 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
             return False
         return True
 
-    def to_battle(self, no_battle: bool = False, challenge_check=False):
-        if not challenge_check:
+    def to_battle(self):
+        if not self._battle_is_challenge:
             self.wait_pop_up(time_out=4)
             end_time = time.time()
             while not self.wait_ocr(match=re.compile("撤离"), time_out=1, box=self.box.top_left, log=True):
@@ -648,10 +648,10 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                 if time.time() - end_time > 30:
                     self.log_info("等待超时，进入挑战超时")
                     return False
-        return self.auto_battle(no_battle=no_battle)
+        return self.auto_battle(no_battle=self._battle_no_battle)
 
-    def to_end(self, challenge=False, stage_name=None, category_name=None, is_extra_mode=False):
-        if challenge:
+    def to_end(self):
+        if self._battle_is_challenge:
             end_feature_name = [fL.gather_icon_out_map2, fL.gather_icon_out_map]
             use_yolo = False
             search_box = None
@@ -672,7 +672,7 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
             if need_follow:
                 self._open_index()
                 # 进入副本详情页
-                if not self.to_stage(stage_name, category_name):
+                if not self.to_stage():
                     self.log_info("二次寻路失败：无法进入『能量淤积点』详情页")
                     return False
                 if result := self.wait_ocr(match=re.compile("追踪"), box=self.box.bottom_right, time_out=5):
@@ -703,21 +703,21 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                     else:
                         return False
 
-                click_key = "放弃" if is_extra_mode else "领取"
+                click_key = "放弃" if self._battle_is_extra_mode else "领取"
                 if result:= self.wait_ocr(match=re.compile(click_key), time_out=1, box=self.box.bottom_right):
                     self.sleep(0.5)
                     self.click_with_alt(result[0])
                     # 如果是放弃领奖，那么点击后还需要点击确认
-                    if is_extra_mode:
+                    if self._battle_is_extra_mode:
                         self.click_confirm()
                         self.log_info("已放弃未领取的奖励")
                     break
                 else:
                     self.move_keys('w', duration=0.25)
         except Exception as e:
-            if category_name == "能量淤积点":
+            if self._battle_category_name == "能量淤积点":
                 self.log_info(f"未找到奖励发放点，尝试二次寻路: {e}")
-                if self._gather_retry_navigate(stage_name, category_name, is_extra_mode=is_extra_mode):
+                if self._gather_retry_navigate():
                     return True
                 else:
                     self.log_info("二次寻路失败，无法找到奖励发放点")
@@ -726,34 +726,34 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                 raise e
         return True
 
-    def get_claim(self, ticket_number, sum_ticket_number):
+    def get_claim(self):
         """
-        执行一次领奖操作，并返回剩余理智。
+        执行一次领奖操作，并更新 self._battle_left_ticket。
 
         逻辑：
-        1. 等待界面稳定，并找到“可领取”提示。
-        2. 尝试点击“获得奖励”，如果失败则本轮任务失败。
-        3. 扣除本轮理智，判断剩余理智是否足够。
-        4. 点击“领取”，记录领取状态。
-
-        返回：
-            int: 扣掉本轮消耗理智后的剩余理智，如果理智不足则返回 0。
+        1. 等待界面稳定，并找到"可领取"提示。
+        2. 尝试点击"获得奖励"，如果失败则本轮任务失败。
+        3. 扣除本轮理智，更新 self._battle_left_ticket。
+        4. 点击"领取"，记录领取状态。
         """
+        ticket_number = stages_cost[self._battle_category_name]
+        sum_ticket_number = self._battle_left_ticket
         self.log_info("领取奖励,当前理智: {}, 本轮消耗理智: {}".format(sum_ticket_number, ticket_number))
         self.wait_ui_stable(refresh_interval=1)
         start_time = time.time()
 
-        # 等待界面出现“可领取”
+        # 等待界面出现"可领取"
         while not self.wait_ocr(match=re.compile("可领取"), box=self.box.top, time_out=1):
             if time.time() - start_time > 60:
-                return 0
+                self._battle_left_ticket = 0
+                return
             self.press_key("f", down_time=0.2)
             self.wait_ui_stable(refresh_interval=1)
 
         # 本轮默认消耗理智
         need_ticket_number = ticket_number
 
-        # 尝试点击“获得奖励”，失败则本轮减少消耗理智
+        # 尝试点击"获得奖励"，失败则本轮减少消耗理智
         if not self.wait_click_ocr(
                 match=re.compile("获得奖励"),
                 box=self.box_of_screen(530 / 1920, 330 / 1080, 1400 / 1920, 570 / 1080),
@@ -762,26 +762,26 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                 log=True
         ):
             self.log_info("未找到 '获得奖励' 按钮, 任务失败")
-            return 0
+            self._battle_left_ticket = 0
+            return
 
         # 扣除本轮消耗理智
         sum_ticket_number -= need_ticket_number
         self.log_info("扣除本轮消耗理智: {}, 剩余理智: {}".format(need_ticket_number, sum_ticket_number))
         if sum_ticket_number < 0:
-            return 0  # 理智不足，不能继续
+            self._battle_left_ticket = 0  # 理智不足，标记为耗尽
+            return
 
-        # 点击“领取”，失败则返回0
+        # 点击"领取"，失败则标记理智为0
         self.next_frame()
         if not self.wait_click_ocr(match=re.compile("领取"), box=self.box.bottom_right, time_out=2, log=True):
             self.log_info("领取失败")
-            return 0
+            self._battle_left_ticket = 0
+            return
+        # 更新剩余理智
+        self._battle_left_ticket = sum_ticket_number
         # 预测下一轮是否还能继续
         next_sum = sum_ticket_number - need_ticket_number
         self.log_info("预测下一轮消耗理智: {}, 预测下一轮剩余理智: {}".format(need_ticket_number, next_sum))
-
         if next_sum < 0:
             self.log_info("下一轮理智不足，无法继续")
-            return 0
-        else:
-            # 返回本轮剩余理智，不返回next_sum，因为减耗只用于判断下一轮可否继续
-            return sum_ticket_number
