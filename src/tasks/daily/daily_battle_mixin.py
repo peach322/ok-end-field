@@ -572,7 +572,7 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                 )
                 if enter_bool:
                     return self._switch_stage_reward_tier(
-                        stage_name,
+                        self._battle_stage_name,
                         reward_tier_override=self._battle_stage_reward_tier_override,
                         ignore_config_tier=self._battle_ignore_config_reward_tier,
                     )
@@ -737,8 +737,7 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
         4. 点击"领取"，记录领取状态。
         """
         ticket_number = stages_cost[self._battle_category_name]
-        sum_ticket_number = self._battle_left_ticket
-        self.log_info("领取奖励,当前理智: {}, 本轮消耗理智: {}".format(sum_ticket_number, ticket_number))
+        self.log_info("领取奖励,当前理智: {}, 本轮消耗理智: {}".format(self._battle_left_ticket, ticket_number))
         self.wait_ui_stable(refresh_interval=1)
         start_time = time.time()
 
@@ -750,10 +749,7 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
             self.press_key("f", down_time=0.2)
             self.wait_ui_stable(refresh_interval=1)
 
-        # 本轮默认消耗理智
-        need_ticket_number = ticket_number
-
-        # 尝试点击"获得奖励"，失败则本轮减少消耗理智
+        # 尝试点击"获得奖励"，失败则本轮任务失败
         if not self.wait_click_ocr(
                 match=re.compile("获得奖励"),
                 box=self.box_of_screen(530 / 1920, 330 / 1080, 1400 / 1920, 570 / 1080),
@@ -766,9 +762,9 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
             return
 
         # 扣除本轮消耗理智
-        sum_ticket_number -= need_ticket_number
-        self.log_info("扣除本轮消耗理智: {}, 剩余理智: {}".format(need_ticket_number, sum_ticket_number))
-        if sum_ticket_number < 0:
+        self._battle_left_ticket -= ticket_number
+        self.log_info("扣除本轮消耗理智: {}, 剩余理智: {}".format(ticket_number, self._battle_left_ticket))
+        if self._battle_left_ticket < 0:
             self._battle_left_ticket = 0  # 理智不足，标记为耗尽
             return
 
@@ -778,10 +774,8 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
             self.log_info("领取失败")
             self._battle_left_ticket = 0
             return
-        # 更新剩余理智
-        self._battle_left_ticket = sum_ticket_number
         # 预测下一轮是否还能继续
-        next_sum = sum_ticket_number - need_ticket_number
-        self.log_info("预测下一轮消耗理智: {}, 预测下一轮剩余理智: {}".format(need_ticket_number, next_sum))
-        if next_sum < 0:
+        next_remaining = self._battle_left_ticket - ticket_number
+        self.log_info("预测下一轮消耗理智: {}, 预测下一轮剩余理智: {}".format(ticket_number, next_remaining))
+        if next_remaining < 0:
             self.log_info("下一轮理智不足，无法继续")
