@@ -29,6 +29,16 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
         super().__init__(*args, **kwargs)
         self.gather_near_transfer_point_dict = dict()
         self.stages_list = stages_list
+        # 战斗会话状态（每次 battle() 开始时初始化）
+        self._battle_stage_name = None               # 当前副本名称
+        self._battle_category_name = None            # 当前副本类别
+        self._battle_left_ticket = 0                 # 当前剩余体力
+        self._battle_nums_extra_run = 0              # 无体力额外刷取次数
+        self._battle_stage_reward_tier_override = None   # 序列指定的奖励档位
+        self._battle_ignore_config_reward_tier = False   # 是否忽略配置项档位
+        self._battle_is_challenge = False            # 是否为挑战模式（能量淤积点）
+        self._battle_no_battle = False               # 是否仅站桩
+        self._battle_is_extra_mode = False           # 当前是否处于无体力额外刷取模式
         # 下列代码在 AutoCombatTask.py 中有部分重复。如有更新，请两边一起修改。
         # 不要试图归并，否则会影响『日常任务』中的选项顺序。
         today_str = datetime.now().strftime("%Y-%m-%d")
@@ -153,18 +163,18 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
         self.press_key("f8")
         self.wait_click_ocr(match=re.compile("索引"), time_out=7, after_sleep=2, box=self.box.top, log=True)
 
-    def _click_track_and_transfer(self, stage_name):
+    def _click_track_and_transfer(self):
         """点击『追踪』按钮，进入地图并传送至最近传送点。"""
         if result := self.wait_ocr(match=re.compile("追踪"), box=self.box.bottom_right, time_out=5):
             if "追踪" in result[0].name and "取" not in result[0].name and "消" not in result[0].name:
                 self.log_info("点击追踪按钮")
                 self.click(result, after_sleep=1)
-        self.to_near_transfer_point(self.gather_near_transfer_point_dict[stage_name])
+        self.to_near_transfer_point(self.gather_near_transfer_point_dict[self._battle_stage_name])
         self.ensure_main()
 
-    def _navigate_via_zip_line(self, stage_name):
+    def _navigate_via_zip_line(self):
         """若配置了滑索路线，则通过滑索移动至目标。"""
-        zip_line_str = self.config.get(stage_name)
+        zip_line_str = self.config.get(self._battle_stage_name)
         if zip_line_str:
             self.wait_click_ocr(match=re.compile("登上滑索架"), time_out=10, after_sleep=2, recheck_time=1, box=self.box.bottom_right, log=True, alt=True)
             zip_line_list = parse_int_sequence(zip_line_str)
@@ -180,14 +190,12 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
 
     def _resolve_stage_from_sequence(self):
         """
-        根据日期和刷本序列自动决定今日副本及奖励档位。
-
-        返回:
-            tuple: (stage_name, stage_reward_tier_override, ignore_config_reward_tier)
+        根据日期和刷本序列自动决定今日副本及奖励档位，结果写入实例变量：
+        _battle_stage_name / _battle_stage_reward_tier_override / _battle_ignore_config_reward_tier
         """
-        stage_name = self.config.get("体力本")
-        stage_reward_tier_override = None
-        ignore_config_reward_tier = False
+        self._battle_stage_name = self.config.get("体力本")
+        self._battle_stage_reward_tier_override = None
+        self._battle_ignore_config_reward_tier = False
 
         seq = self.config.get("刷本序列", "")
         self.log_info(f"检测到刷本序列配置: {seq if seq else '(空)'}")
@@ -223,7 +231,7 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                         start = datetime.strptime(start_date, "%Y-%m-%d").date()
                     except Exception as e:
                         self.log_info(f"刷体力开始日期解析失败: {e}，已使用默认配置体力本")
-                        return stage_name, None, False
+                        return
                     if start_date and today < start:
                         explain = (
                             f"刷体力自动选择失败：开始日期 {start_date} 在未来"
@@ -235,13 +243,15 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                         days = (today - start).days
                         idx = days % len(seq_list)
                         raw_auto_stage = seq_list[idx]
-                        auto_stage, stage_reward_tier_override = self._split_stage_name_and_reward_tier(raw_auto_stage)
-                        ignore_config_reward_tier = True
+                        auto_stage, self._battle_stage_reward_tier_override = (
+                            self._split_stage_name_and_reward_tier(raw_auto_stage)
+                        )
+                        self._battle_ignore_config_reward_tier = True
                         self.log_info(
                             f"今日刷本序列命中: 原始项={raw_auto_stage}, "
-                            f"关卡={auto_stage}, 奖励档位={stage_reward_tier_override or self.REWARD_TIER_KEEP}"
+                            f"关卡={auto_stage}, 奖励档位={self._battle_stage_reward_tier_override or self.REWARD_TIER_KEEP}"
                         )
-                        tier_hint = f"，奖励档位：{stage_reward_tier_override}" if stage_reward_tier_override else ""
+                        tier_hint = f"，奖励档位：{self._battle_stage_reward_tier_override}" if self._battle_stage_reward_tier_override else ""
                         explain = (
                             f"刷体力自动选择: 今天是第{days + 1}天，"
                             f"命中序列项：{raw_auto_stage}，"
@@ -251,18 +261,16 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
             self.log_info(f"刷体力自动选择异常: {e}\n{traceback.format_exc()}")
 
         if auto_stage:
-            stage_name = auto_stage
+            self._battle_stage_name = auto_stage
             self.log_info(explain)
         else:
             self.log_info(explain or "刷体力自动选择失败，使用原配置体力本")
             if seq:
                 fallback_tier = self.config.get(self.CFG_STAGE_REWARD_TIER, self.REWARD_TIER_KEEP)
                 self.log_info(
-                    f"刷本序列未生效，回退体力本配置: 关卡={stage_name}, "
-                    f"奖励档位={fallback_tier if stage_name in self.REWARD_TIER_STAGE_SET else self.REWARD_TIER_KEEP}"
+                    f"刷本序列未生效，回退体力本配置: 关卡={self._battle_stage_name}, "
+                    f"奖励档位={fallback_tier if self._battle_stage_name in self.REWARD_TIER_STAGE_SET else self.REWARD_TIER_KEEP}"
                 )
-
-        return stage_name, stage_reward_tier_override, ignore_config_reward_tier
 
     def _consume_stamina_potions(self):
         """
@@ -308,20 +316,18 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
         return True
 
     def battle(self):
-        # 自动根据日期和刷本序列决定刷哪个本
-        stage_name, stage_reward_tier_override, ignore_config_reward_tier = (
-            self._resolve_stage_from_sequence()
-        )
+        # 自动根据日期和刷本序列决定刷哪个本，结果写入实例变量
+        self._resolve_stage_from_sequence()
 
         today_reward_tier = (
-            stage_reward_tier_override
-            if ignore_config_reward_tier
+            self._battle_stage_reward_tier_override
+            if self._battle_ignore_config_reward_tier
             else self.config.get(self.CFG_STAGE_REWARD_TIER, self.REWARD_TIER_KEEP)
         )
-        if stage_name not in self.REWARD_TIER_STAGE_SET:
+        if self._battle_stage_name not in self.REWARD_TIER_STAGE_SET:
             today_reward_tier = self.REWARD_TIER_KEEP
         self.log_info(
-            f"今日最终刷本: {self._format_stage_with_reward_tier(stage_name, today_reward_tier)} "
+            f"今日最终刷本: {self._format_stage_with_reward_tier(self._battle_stage_name, today_reward_tier)} "
             f"(奖励档位={today_reward_tier})"
         )
 
@@ -332,68 +338,52 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
         if not self._consume_stamina_potions():
             return False
 
-        left_ticket = self.detect_ticket_number()
-        self.log_info(f"当前体力: {left_ticket}")
-        category_name = get_stage_category(stage_name)
+        self._battle_left_ticket = self.detect_ticket_number()
+        self.log_info(f"当前体力: {self._battle_left_ticket}")
+        self._battle_category_name = get_stage_category(self._battle_stage_name)
+        self._battle_nums_extra_run = max(0, int(self.config.get("体力刷完后继续刷取次数", 0) or 0))
+        self._battle_no_battle = self.config.get("仅站桩", False)
+        self._battle_is_extra_mode = False
 
-        nums_extra_run = max(0, int(self.config.get("体力刷完后继续刷取次数", 0) or 0))
-        if nums_extra_run > 0:
-            self.log_info(f"体力刷完后继续刷取次数: {nums_extra_run}")
+        if self._battle_nums_extra_run > 0:
+            self.log_info(f"体力刷完后继续刷取次数: {self._battle_nums_extra_run}")
 
-        if left_ticket < stages_cost[category_name]:
-            if nums_extra_run <= 0:
+        if self._battle_left_ticket < stages_cost[self._battle_category_name]:
+            if self._battle_nums_extra_run <= 0:
                 self.log_info("体力不足")
                 return True
             else:
-                if category_name != "能量淤积点":
-                    self.log_info(f"不支持无体力刷取的副本: {category_name}")
+                if self._battle_category_name != "能量淤积点":
+                    self.log_info(f"不支持无体力刷取的副本: {self._battle_category_name}")
                     return True
                 # 体力不足，执行额外刷取
-                self.log_info(f"体力不足，将执行 {nums_extra_run} 次额外刷取（放弃领奖）")
-                if not self.to_stage(
-                    stage_name,
-                    category_name,
-                    reward_tier_override=stage_reward_tier_override,
-                    ignore_config_tier=ignore_config_reward_tier,
-                ):
+                self.log_info(f"体力不足，将执行 {self._battle_nums_extra_run} 次额外刷取（放弃领奖）")
+                if not self.to_stage():
                     return False
                 try:
-                    return self.battle_gather(
-                        left_ticket, stage_name, category_name,
-                        no_battle=self.config.get("仅站桩", False),
-                        nums_extra_run=nums_extra_run,
-                    )
+                    return self.battle_gather()
                 except Exception as e:
                     self.log_info(f"battle_gather_extra 异常: {e}\n{traceback.format_exc()}")
-                    self.screenshot(f'{datetime.now().strftime("%Y%m%d")}_DailyBattleMixin_battleGather_Extra_Exception_{category_name}_{stage_name}')
+                    self.screenshot(f'{datetime.now().strftime("%Y%m%d")}_DailyBattleMixin_battleGather_Extra_Exception_{self._battle_category_name}_{self._battle_stage_name}')
                     return False
 
         # 进入副本详情页
-        if not self.to_stage(
-            stage_name,
-            category_name,
-            reward_tier_override=stage_reward_tier_override,
-            ignore_config_tier=ignore_config_reward_tier,
-        ):
+        if not self.to_stage():
             return False
 
-        if category_name == "能量淤积点":
+        if self._battle_category_name == "能量淤积点":
             try:
-                return self.battle_gather(
-                    left_ticket, stage_name, category_name,
-                    no_battle=self.config.get("仅站桩", False),
-                    nums_extra_run=nums_extra_run,
-                )
+                return self.battle_gather()
             except Exception as e:
                 self.log_info(f"battle_gather 异常: {e}\n{traceback.format_exc()}")
-                self.screenshot(f'{datetime.now().strftime("%Y%m%d")}_DailyBattleMixin_battleGather_Exception_{category_name}_{stage_name}')
+                self.screenshot(f'{datetime.now().strftime("%Y%m%d")}_DailyBattleMixin_battleGather_Exception_{self._battle_category_name}_{self._battle_stage_name}')
                 return False
         else: # 协议空间 or 危境预演
             try:
-                return self.battle_space(left_ticket, stage_name, category_name)
+                return self.battle_space()
             except Exception as e:
                 self.log_info(f"battle_space 异常: {e}\n{traceback.format_exc()}")
-                self.screenshot(f'{datetime.now().strftime("%Y%m%d")}_DailyBattleMixin_battleSpace_Exception_{category_name}_{stage_name}')
+                self.screenshot(f'{datetime.now().strftime("%Y%m%d")}_DailyBattleMixin_battleSpace_Exception_{self._battle_category_name}_{self._battle_stage_name}')
                 return False
 
     def _init_gather_transfer_points(self):
@@ -408,20 +398,18 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
             "首墩": self.box.top,
         })
 
-    def battle_gather(self, left_ticket, stage_name, category_name, no_battle=False, nums_extra_run=0):
+    def battle_gather(self):
         self._init_gather_transfer_points()
+        self._battle_is_challenge = True
         # 点击追踪按钮，进入地图并传送
-        self._click_track_and_transfer(stage_name)
+        self._click_track_and_transfer()
         # 滑索移动
-        self._navigate_via_zip_line(stage_name)
-        #
+        self._navigate_via_zip_line()
         self.navigate_until_target(target_ocr_pattern=re.compile("激发|放弃"), nav_feature_name=fL.gather_icon_out_map, time_out=60)
-        #
         if self.wait_ocr(match=re.compile("放弃"), box=self.box.bottom_right, time_out=1):
             self.log_info("放弃未领取的奖励")
             self.wait_click_ocr(match=re.compile("放弃"), box=self.box.bottom_right, time_out=5, recheck_time=1, alt=True)
             self.click_confirm()
-        #
         result = self.wait_ocr(match=re.compile("激发"), box=self.box.bottom_right, time_out=5)
         if not result:
             self.log_info("没有找到『激发』按钮")
@@ -431,16 +419,17 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
             self.log_info("没有找到『激发』按钮")
             return False
         # 开战
-        return self.battle_recycle(left_ticket, stage_name, category_name, "挑战", no_battle=no_battle, challenge_check=True, nums_extra_run=nums_extra_run)
+        return self.battle_recycle()
 
-    def battle_space(self, left_ticket, stage_name, category_name):
+    def battle_space(self):
+        self._battle_is_challenge = False
         self.wait_click_ocr(match=re.compile("进入"), time_out=5, after_sleep=2, box=self.box.bottom_right, log=True)
         if self.wait_click_ocr(match=re.compile("取消"), time_out=5, box=self.box.bottom_left, log=True):
             self.log_info("没有进入战斗，可能是因为已经没理智了")
             return True
-        return self.battle_recycle(left_ticket, stage_name, category_name, "进入")
+        return self.battle_recycle()
 
-    def _gather_retry_navigate(self, stage_name, category_name, is_extra_mode=False):
+    def _gather_retry_navigate(self):
         """
         能量淤积点的二次寻路：重新打开索引 → 进入副本详情 → 追踪传送 → 滑索 → 领取奖励。
 
@@ -451,16 +440,16 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
         # F8 索引
         self._open_index()
         # 进入副本详情页
-        if not self.to_stage(stage_name, category_name):
+        if not self.to_stage():
             self.log_info("二次寻路失败：无法进入『能量淤积点』详情页")
             return False
         # 点击追踪按钮，进入地图并传送
-        self._click_track_and_transfer(stage_name)
+        self._click_track_and_transfer()
         # 滑索移动
-        self._navigate_via_zip_line(stage_name)
+        self._navigate_via_zip_line()
         #
         self.navigate_until_target(target_ocr_pattern=re.compile("领取"), nav_feature_name=fL.gather_icon_out_map, time_out=60)
-        click_key = "放弃" if is_extra_mode else "领取"
+        click_key = "放弃" if self._battle_is_extra_mode else "领取"
         result = self.wait_ocr(match=re.compile(click_key), box=self.box.bottom_right, time_out=5)
         if not result:
             self.log_info(f"二次寻路失败：没有找到『{click_key}』按钮")
@@ -470,18 +459,18 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
             self.log_info(f"二次寻路失败：没有找到『{click_key}奖励』按钮")
             return False
         # 如果是放弃领奖，那么还需要点击确认
-        if is_extra_mode:
+        if self._battle_is_extra_mode:
             self.click_confirm()
             self.log_info("已放弃未领取的奖励")
         return True
 
-    def to_restart(self, is_extra_mode):
+    def to_restart(self):
         """
         开始下一轮刷取
         如果使用体力则点击重新挑战
         否则需要点击 激发 -> 挑战 -> 确认
         """
-        if is_extra_mode:
+        if self._battle_is_extra_mode:
             # 放弃领取奖励后需要重新点击激发按钮
             result = self.wait_ocr(match=re.compile("激发"), box=self.box.bottom_right, time_out=5)
             if not result:
@@ -496,49 +485,49 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                                 after_sleep=2, recheck_time=1)
         return True
 
-    def battle_recycle(self, left_ticket, stage_name, category_name, enter_str, no_battle=False, challenge_check=False, nums_extra_run=0):
-        enter_bool = False
+    def battle_recycle(self):
+        is_entered = False
         cnt_extra_run = 0
-        is_extra_mode = False
-        if nums_extra_run > 0:
-            assert category_name == "能量淤积点", "体力刷完后继续刷功能仅支持能量淤积点"
-            assert challenge_check, "体力刷完后继续刷功能仅支持挑战模式"
+        enter_str = "挑战" if self._battle_is_challenge else "进入"
+        if self._battle_nums_extra_run > 0:
+            assert self._battle_category_name == "能量淤积点", "体力刷完后继续刷功能仅支持能量淤积点"
+            assert self._battle_is_challenge, "体力刷完后继续刷功能仅支持挑战模式"
 
-        while left_ticket >= stages_cost[category_name] or cnt_extra_run < nums_extra_run:
-            if enter_bool:
+        while self._battle_left_ticket >= stages_cost[self._battle_category_name] or cnt_extra_run < self._battle_nums_extra_run:
+            if is_entered:
                 # 开始下一轮刷取
-                self.to_restart(is_extra_mode=is_extra_mode)
+                self.to_restart()
             else:
                 # 根据 enter_str 决定点击位置, 如果是「挑战」, 并且刷取的是「能量淤积点」, 则点击右下四分之一区域, 避免误触
-                enter_box = self.box.bottom_right_quarter if enter_str == "挑战" and category_name == "能量淤积点" else self.box.bottom_right
+                enter_box = self.box.bottom_right_quarter if enter_str == "挑战" and self._battle_category_name == "能量淤积点" else self.box.bottom_right
                 self.wait_click_ocr(match=re.compile(enter_str), time_out=10, after_sleep=2, box=enter_box,
                                     log=True, recheck_time=1)
                 # 如果无体力，点击放弃领奖后需要点击确认
-                if nums_extra_run > 0 and left_ticket < stages_cost[category_name]:
+                if self._battle_nums_extra_run > 0 and self._battle_left_ticket < stages_cost[self._battle_category_name]:
                     self.click_confirm()
                     self.log_info("无体力，开始额外刷取（放弃领奖）")
-                    is_extra_mode = True
-                enter_bool = True
-            if not self.to_battle(no_battle=no_battle, challenge_check=challenge_check):
+                    self._battle_is_extra_mode = True
+                is_entered = True
+            if not self.to_battle():
                 return False
             # 移至奖励发放点，按下 F
-            if not self.to_end(challenge=challenge_check, stage_name=stage_name, category_name=category_name, is_extra_mode=is_extra_mode):
+            if not self.to_end():
                 self.log_info("未发现奖励领取点")
                 return False
 
-            if is_extra_mode:
+            if self._battle_is_extra_mode:
                 # 额外刷取则不领取奖励
                 cnt_extra_run += 1
             else:
                 # 在『有可领取的奖励』页面上领取奖励
-                left_ticket = self.get_claim(stages_cost[category_name], left_ticket)
+                self.get_claim()
                 #
                 self.sleep(2)
-                if left_ticket <= 0:
+                if self._battle_left_ticket <= 0:
                     self.wait_click_ocr(match=re.compile("离开"), box=self.box.bottom_right, log=True, recheck_time=1)
 
                     # 如果体力耗尽但设置了额外刷取次数，则开始额外刷取
-                    is_extra_mode = nums_extra_run > 0 and cnt_extra_run < nums_extra_run
+                    self._battle_is_extra_mode = self._battle_nums_extra_run > 0 and cnt_extra_run < self._battle_nums_extra_run
         return True
 
     def to_stage(self, stage_name, category_name, reward_tier_override=None, ignore_config_tier=False):
