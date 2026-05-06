@@ -450,32 +450,32 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
 
     def _gather_retry_navigate(self, stage_name, category_name, is_extra_mode=False):
         """
-        能量淤积点的二次寻路：重新打开索引 → 进入副本详情 → 追踪传送 → 滑索 → 领取奖励。
+        开地图寻找：通过 F8 索引重新传送并导航至领奖点。
 
         返回:
             bool: 成功找到并点击『领取奖励』按钮时返回 True，否则 False。
         """
-        self.log_info("当前副本为『能量淤积点』，开始进行二次寻路。")
+        self.log_info("开始开地图寻找：F8 索引 → 进入副本详情 → 追踪传送 → 导航至领奖点")
         # F8 索引
         self._open_index()
         # 进入副本详情页
         if not self.to_stage(stage_name, category_name):
-            self.log_info("二次寻路失败：无法进入『能量淤积点』详情页")
+            self.log_info("开地图寻找失败：无法进入『能量淤积点』详情页")
             return False
         # 点击追踪按钮，进入地图并传送
         self._click_track_and_transfer(stage_name)
         # 滑索移动
         self._navigate_via_zip_line(stage_name)
-        #
+        # 导航至领奖点
         self.navigate_until_target(target_ocr_pattern=re.compile("领取"), nav_feature_name=fL.gather_icon_out_map, time_out=60)
         click_key = "放弃" if is_extra_mode else "领取"
         result = self.wait_ocr(match=re.compile(click_key), box=self.box.bottom_right, time_out=5)
         if not result:
-            self.log_info(f"二次寻路失败：没有找到『{click_key}』按钮")
+            self.log_info(f"开地图寻找失败：未找到『{click_key}』按钮")
             return False
         self.sleep(1)
         if not self.wait_click_ocr(match=re.compile(click_key), box=self.box.bottom_right, time_out=5, recheck_time=1, alt=True):
-            self.log_info(f"二次寻路失败：没有找到『{click_key}奖励』按钮")
+            self.log_info(f"开地图寻找失败：无法点击『{click_key}』按钮")
             return False
         # 如果是放弃领奖，那么还需要点击确认
         if is_extra_mode:
@@ -513,9 +513,11 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
             assert challenge_check, "体力刷完后继续刷功能仅支持挑战模式"
 
         while left_ticket >= stages_cost[category_name] or cnt_extra_run < nums_extra_run:
+
+            # ── 一. 前往战斗地点 ─────────────────────────────────────────
             if enter_bool:
-                # 开始下一轮刷取
-                self.to_restart(is_extra_mode=is_extra_mode)
+                if not self.to_restart(is_extra_mode=is_extra_mode):
+                    return False
             else:
                 # 根据 enter_str 决定点击位置, 如果是「挑战」, 并且刷取的是「能量淤积点」, 则点击右下四分之一区域, 避免误触
                 enter_box = self.box.bottom_right_quarter if enter_str == "挑战" and category_name == "能量淤积点" else self.box.bottom_right
@@ -527,24 +529,24 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                     self.log_info("无体力，开始额外刷取（放弃领奖）")
                     is_extra_mode = True
                 enter_bool = True
+
+            # ── 二. 战斗 ─────────────────────────────────────────────────
             if not self.to_battle(no_battle=no_battle, challenge_check=challenge_check):
                 return False
-            # 移至奖励发放点，按下 F
+
+            # ── 三. 前往领奖点（支持二次寻路和开地图寻找）────────────────
             if not self.to_end(challenge=challenge_check, stage_name=stage_name, category_name=category_name, is_extra_mode=is_extra_mode):
                 self.log_info("未发现奖励领取点")
                 return False
 
+            # ── 四. 领奖 → 领奖后若可继续战斗则继续 ─────────────────────
             if is_extra_mode:
-                # 额外刷取则不领取奖励
                 cnt_extra_run += 1
             else:
-                # 在『有可领取的奖励』页面上领取奖励
                 left_ticket = self.get_claim(stages_cost[category_name], left_ticket)
-                #
                 self.sleep(2)
                 if left_ticket <= 0:
                     self.wait_click_ocr(match=re.compile("离开"), box=self.box.bottom_right, log=True, recheck_time=1)
-
                     # 如果体力耗尽但设置了额外刷取次数，则开始额外刷取
                     is_extra_mode = nums_extra_run > 0 and cnt_extra_run < nums_extra_run
         return True
@@ -669,81 +671,136 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                     return False
         return self.auto_battle(no_battle=no_battle)
 
-    def to_end(self, challenge=False, stage_name=None, category_name=None, is_extra_mode=False):
-        if challenge:
-            end_feature_name = [fL.gather_icon_out_map2, fL.gather_icon_out_map]
-            use_yolo = False
-            search_box = None
-            need_follow= True
-            for i in range(9):
-                for end_feature in end_feature_name:
-                    if self.find_feature(
-                        end_feature,
-                        box=self.box_of_screen((1920 - 1550) / 1920, 150 / 1080, 1550 / 1920, (1080 - 150) / 1080),
-                    ):
-                        need_follow = False
-                        break
-                if not need_follow:
+    def _approach_reward_point(self, end_feature_names, search_box, click_key, is_extra_mode):
+        """
+        主寻路：在当前视野内移动并对齐至领奖点，成功则点击『领取』/『放弃』。
+
+        返回:
+            bool: 成功找到并点击按钮时返回 True，否则 False。
+        """
+        found = False
+        for _ in range(9):
+            for feat in end_feature_names:
+                if self.find_feature(feat, box=search_box):
+                    found = True
                     break
-                self.click(key="middle")
-                self.move_keys("aw", duration=0.1)
-            # F8 索引
-            if need_follow:
-                self._open_index()
-                # 进入副本详情页
-                if not self.to_stage(stage_name, category_name):
-                    self.log_info("二次寻路失败：无法进入『能量淤积点』详情页")
-                    return False
-                if result := self.wait_ocr(match=re.compile("追踪"), box=self.box.bottom_right, time_out=5):
-                    if "追踪" in result[0].name and "取" not in result[0].name and "消" not in result[0].name:
-                        self.log_info("点击追踪按钮")
-                        self.click(result, after_sleep=2)
-                    self.ensure_main()
-                else:
-                    raise Exception("未找到追踪按钮")
-            self.click(key="middle", after_sleep=2)
-        else:
-            end_feature_name = "battle_end"
-            use_yolo = True
-            search_box = self.box_of_screen((1920 - 1550) / 1920, 0, 1550 / 1920, (1080 - 150) / 1080)
-            for _ in range(9):
-                if self.yolo_detect(end_feature_name, box=search_box):
-                    break
-                self.click(key="middle", after_sleep=2)
-                self.move_keys("aw", duration=0.1)
-                self.sleep(1)
+            if found:
+                break
+            self.click(key="middle")
+            self.move_keys("aw", duration=0.1)
+        if not found:
+            self.log_info("主寻路：当前视野内未找到领奖点图标")
+            return False
+        self.click(key="middle", after_sleep=2)
         start_time = time.time()
         try:
-            while self.align_ocr_or_find_target_to_center(end_feature_name, ocr=False, use_yolo=use_yolo, box=search_box,
-                                                        only_x=True, threshold=0.5, tolerance=100):
+            while self.align_ocr_or_find_target_to_center(end_feature_names, ocr=False, use_yolo=False, box=None,
+                                                           only_x=True, threshold=0.5, tolerance=100):
                 if time.time() - start_time > 60:
-                    if challenge:
-                        raise TimeoutError("等待奖励发放点超时")
-                    else:
-                        return False
-
-                click_key = "放弃" if is_extra_mode else "领取"
-                if result:= self.wait_ocr(match=re.compile(click_key), time_out=1, box=self.box.bottom_right):
+                    raise TimeoutError("主寻路靠近领奖点超时")
+                if result := self.wait_ocr(match=re.compile(click_key), time_out=1, box=self.box.bottom_right):
                     self.sleep(0.5)
                     self.click_with_alt(result[0])
-                    # 如果是放弃领奖，那么点击后还需要点击确认
                     if is_extra_mode:
                         self.click_confirm()
                         self.log_info("已放弃未领取的奖励")
-                    break
-                else:
-                    self.move_keys('w', duration=0.25)
-        except Exception as e:
-            if category_name == "能量淤积点":
-                self.log_info(f"未找到奖励发放点，尝试二次寻路: {e}")
-                if self._gather_retry_navigate(stage_name, category_name, is_extra_mode=is_extra_mode):
                     return True
-                else:
-                    self.log_info("二次寻路失败，无法找到奖励发放点")
-                    return False
-            else:
-                raise e
+                self.move_keys('w', duration=0.25)
+        except TimeoutError as e:
+            self.log_info(str(e))
+            return False
         return True
+
+    def _secondary_pathfind_to_reward(self, click_key, is_extra_mode):
+        """
+        二次寻路：从当前位置利用 navigate_until_target 再次寻路至领奖点。
+
+        返回:
+            bool: 成功找到并点击按钮时返回 True，否则 False。
+        """
+        try:
+            self.navigate_until_target(
+                target_ocr_pattern=re.compile(click_key),
+                nav_feature_name=fL.gather_icon_out_map,
+                time_out=60,
+            )
+        except Exception as e:
+            self.log_info(f"二次寻路导航异常: {e}")
+            return False
+        result = self.wait_ocr(match=re.compile(click_key), box=self.box.bottom_right, time_out=5)
+        if not result:
+            self.log_info(f"二次寻路失败：未找到『{click_key}』按钮")
+            return False
+        self.sleep(1)
+        if not self.wait_click_ocr(match=re.compile(click_key), box=self.box.bottom_right, time_out=5, recheck_time=1, alt=True):
+            self.log_info(f"二次寻路失败：无法点击『{click_key}』按钮")
+            return False
+        if is_extra_mode:
+            self.click_confirm()
+            self.log_info("已放弃未领取的奖励")
+        return True
+
+    def _to_end_gather(self, stage_name, category_name, is_extra_mode):
+        """
+        能量淤积点 前往领奖点 流程：
+        1. 主寻路：在当前视野内查找并靠近领奖点
+        2. 二次寻路：若主寻路失败，从当前位置利用 navigate_until_target 再次寻路
+        3. 开地图寻找：若二次寻路失败，通过 F8 索引重新传送并导航
+        """
+        end_feature_names = [fL.gather_icon_out_map2, fL.gather_icon_out_map]
+        search_box = self.box_of_screen((1920 - 1550) / 1920, 150 / 1080, 1550 / 1920, (1080 - 150) / 1080)
+        click_key = "放弃" if is_extra_mode else "领取"
+
+        # 一. 主寻路
+        if self._approach_reward_point(end_feature_names, search_box, click_key, is_extra_mode):
+            return True
+
+        # 二. 二次寻路
+        self.log_info("主寻路未找到领奖点，尝试二次寻路")
+        if self._secondary_pathfind_to_reward(click_key, is_extra_mode):
+            return True
+
+        # 三. 开地图寻找
+        self.log_info("二次寻路失败，尝试开地图寻找")
+        return self._gather_retry_navigate(stage_name, category_name, is_extra_mode)
+
+    def _to_end_space(self, is_extra_mode):
+        """协议空间 / 危境预演 前往领奖点 流程：使用 YOLO 检测战斗结束点。"""
+        end_feature_name = "battle_end"
+        search_box = self.box_of_screen((1920 - 1550) / 1920, 0, 1550 / 1920, (1080 - 150) / 1080)
+        for _ in range(9):
+            if self.yolo_detect(end_feature_name, box=search_box):
+                break
+            self.click(key="middle", after_sleep=2)
+            self.move_keys("aw", duration=0.1)
+            self.sleep(1)
+        click_key = "放弃" if is_extra_mode else "领取"
+        start_time = time.time()
+        while self.align_ocr_or_find_target_to_center(end_feature_name, ocr=False, use_yolo=True, box=search_box,
+                                                       only_x=True, threshold=0.5, tolerance=100):
+            if time.time() - start_time > 60:
+                return False
+            if result := self.wait_ocr(match=re.compile(click_key), time_out=1, box=self.box.bottom_right):
+                self.sleep(0.5)
+                self.click_with_alt(result[0])
+                if is_extra_mode:
+                    self.click_confirm()
+                    self.log_info("已放弃未领取的奖励")
+                break
+            self.move_keys('w', duration=0.25)
+        return True
+
+    def to_end(self, challenge=False, stage_name=None, category_name=None, is_extra_mode=False):
+        """
+        前往领奖点并点击『领取』/『放弃』。
+
+        challenge=True : 能量淤积点，支持主寻路 → 二次寻路 → 开地图寻找
+        challenge=False: 协议空间 / 危境预演，使用 YOLO 检测
+        """
+        if challenge:
+            return self._to_end_gather(stage_name, category_name, is_extra_mode)
+        else:
+            return self._to_end_space(is_extra_mode)
 
     def get_claim(self, ticket_number, sum_ticket_number):
         """
