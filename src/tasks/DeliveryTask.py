@@ -1,10 +1,12 @@
 import re
 import time
+import webbrowser
 from datetime import datetime
 from dataclasses import dataclass
 from typing import List, Tuple
 
 from ok import Box, TaskDisabledException
+from qfluentwidgets import FluentIcon
 
 from src.data.FeatureList import FeatureList as fL
 from src.tasks.account.account_mixin import AccountMixin
@@ -28,7 +30,7 @@ class DeliveryRow:
     box: Tuple[float, float, float, float]  # (x1, y1, x2, y2)
 
 
-class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
+class DeliveryTask(ZipLineMixin, MapMixin):
     """运输委托自动化任务类 - 处理游戏中的送货操作"""
 
     # 配置键名常量
@@ -57,27 +59,29 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         self.config_description.update({
             self.CFG_SCROLL_ENABLE: "启用后在对齐滑索时会自动滚动放大视角\n可能会提高对齐成功率，但也可能导致对齐成功率下降较为明显\n建议启用此项时不要使用非白发或有白帽角色",
             self.CFG_TEST_TARGET: "默认是无，表示正常执行相关任务\n也可以选择特定的滑索分叉序列来测试滑索功能\n选择完整循环测试则会依次测试每个送货目标的完整流程\n(需要锁定次要任务在送货任务上或附近)",
-            self.CFG_ONLY_ACCEPT: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n仅接取7.31w武陵委托，不送货',
+            self.CFG_ONLY_ACCEPT: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n仅接取武陵委托，不送货',
             self.CFG_ONLY_DELIVER: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n接取武陵委托后启动自动识别送货',
+            self.CFG_TUTORIAL: self.TUTORIAL_TIPS,
             "发生异常时终止游戏": "勾选这个选项：如果「完成后退出」被选定，那么抛出异常也会退出游戏和App。",
         })
-        tutorial_value = f"{self.TUTORIAL_LINK}\n{self.TUTORIAL_TIPS}"
+        self.default_config_group.update({"滑索配置": [self.CFG_TO_DELIVERY_POINT] + self.ends})
         self.default_config.update(
             {
-                self.CFG_TUTORIAL: tutorial_value,
                 self.CFG_TARGET_TICKET_NUM: "119000",
-                self.CFG_TO_DELIVERY_POINT: "36,14",
-                "常沄": "14,108,64,109,60",
-                "资源": "14,108,64,109",
-                "彦宁": "14,108,64,108,59",
-                "齐纶": "14,108,106",
+                **{x: "" for x in [self.CFG_TO_DELIVERY_POINT] + self.ends},
                 self.CFG_SCROLL_ENABLE: False,
                 self.CFG_ONLY_ACCEPT: False,
                 self.CFG_ONLY_DELIVER: False,
                 self.CFG_TEST_TARGET: self.TEST_NONE,
-                "发生异常时终止游戏": False
+                "发生异常时终止游戏": False,
             }
         )
+        self.config_type[self.CFG_TUTORIAL] = {
+            "type": "button",
+            "text": "打开教程",
+            "icon": FluentIcon.LINK,
+            "callback": self.open_tutorial_link,
+        }
         self.config_type[self.CFG_TEST_TARGET] = {
             "type": "drop_down",
             "options": [self.TEST_NONE, self.CFG_TO_DELIVERY_POINT] + self.ends + [self.TEST_FULL_CYCLE],
@@ -91,6 +95,9 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         self._last_refresh_ts = 0
         self.try_time = 0
         self.add_exit_after_config()
+
+    def open_tutorial_link(self, *_):
+        webbrowser.open(self.TUTORIAL_LINK)
 
     def merge_left_right_groups(self) -> List[DeliveryRow]:
         """合并OCR左右区域结果，按规则分组为行对象
@@ -493,7 +500,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                 self.wait_pop_up(after_sleep=2)
                 break
 
-    def _run_single_delivery_cycle(self):
+    def run_one_account(self, account_info):
         if self.config.get(self.CFG_TEST_TARGET) == self.TEST_NONE:
             ends_list_pattern_dict = {}
             for end in self.ends:
@@ -590,47 +597,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                 self.zip_line_list_go(zip_line_list, need_scroll=self.config.get(self.CFG_SCROLL_ENABLE))
 
     def run(self):
-        """运输委托任务的主入口，支持与日常任务一致的多账号执行逻辑。"""
-        try:
-            # 在运行期覆盖教程链接，避免在 __init__ 阶段 self.config 仍为 None。
-            self.config[self.CFG_TUTORIAL] = f"{self.TUTORIAL_LINK}\n{self.TUTORIAL_TIPS}"
-            accounts_bool = self.config.get("多账户模式", False)
-            if accounts_bool:
-                accounts_list = self.get_account_list()
-                repeat_times = len(accounts_list)
-                if repeat_times == 0:
-                    self.log_info("多账户模式已开启，但账号列表为空，自动送货任务结束", notify=True)
-                    return
-            else:
-                accounts_list = []
-                repeat_times = 1
-
-            for repeat_idx in range(repeat_times):
-                if accounts_bool:
-                    account = accounts_list[repeat_idx]
-                    username = str(account.get("username", "")).strip()
-                    password = str(account.get("password", ""))
-                    account_id = str(account.get("account_id", "")).strip() or username
-                    if not username:
-                        self.log_info(f"第 {repeat_idx + 1}/{repeat_times} 个账号为空，已跳过")
-                        continue
-
-                    self.set_current_account(username, account_id)
-                    self.log_info(f"开始第 {repeat_idx + 1}/{repeat_times} 个账号({username[-4:]})自动送货")
-                    self.login_flow(username, password)
-                else:
-                    self.set_current_account("", "")
-
-                self._run_single_delivery_cycle()
-
-        except Exception as e:
-            self.screenshot(f'{datetime.now().strftime("%Y%m%d")}_DeliveryTask_Exception')
-            if not self.config.get("发生异常时终止游戏", False):
-                self.log_info("发生异常，继续游戏", notify=True)
-                raise e
-            else:
-                if isinstance(e, TaskDisabledException):
-                    self.log_info("发生异常，继续游戏", notify=True)
-                    raise e
-                else:
-                    self.log_info("发生异常，终止游戏", notify=True)
+        if self.multi_account_mode and self.config.get(self.CFG_TEST_TARGET) == self.TEST_NONE:
+            self.run_multi_account()
+        else:
+            self.run_one_account({"username": "default", "password": "", "account_id": ""})

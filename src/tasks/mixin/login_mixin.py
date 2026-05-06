@@ -8,6 +8,14 @@ from ok import Box
 
 class LoginMixin(BaseEfTask):
 
+    def do_login(self, username: str, password: str = "") -> bool:
+        """登录账号。"""
+        return self.login_flow(username, password)
+    def is_logged_in(self, username: str) -> bool: 
+        """检查是否已登录指定账号。"""
+        return False
+
+
     def login_flow(self, username: str, password: str | None = None):
         """
         执行登录流程：登出当前账号并尝试用指定账号登录。
@@ -69,9 +77,11 @@ class LoginMixin(BaseEfTask):
             self.log_error("未找到‘最近’按钮，可能未成功返回登录界面")
             raise RuntimeError("未找到‘最近’按钮，可能未成功返回登录界面")
         self.click_text(re.compile(username[-4:]), box=self.box_of_screen(0, (result[0].y+result[0].height)/self.height, 1, 1))  # 点击最近登录的账号（假设是唯一的）
-        self.click_text(re.compile("登录"))
+        self.click_text("登录")
         if not self._confirm_logged_in():
             raise RuntimeError("登录失败")
+        return True
+    
     def _confirm_logged_in(self, time_out: int = 120) -> bool:
         """
         等待并确认当前是否已登录（通过查找登出按钮判断）。
