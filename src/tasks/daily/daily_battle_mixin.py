@@ -785,6 +785,7 @@ class DailyBattleMixin(MapMixin, ZipLineMixin, BattleMixin, Common):
                 self.click_with_alt(result[0])
                 if is_extra_mode:
                     self.click_confirm()
+                    self.log_info("已放弃未领取的奖励")
                 break
             self.move_keys('w', duration=0.25)
         return True
