@@ -52,15 +52,15 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         super().__init__(*args, **kwargs)
         self.default_config.update({"_enabled": True})
         self.name = "自动送货"
-        self.description = "仅武陵送货,教程视频 BV1LLc7zFEF9"
+        self.description = "武陵地区送货（武陵城/试验园区）,教程视频 BV1LLc7zFEF9"
         self.support_schedule_task = True
         self.support_multi_account = True
-        self.ends = ["常沄", "资源", "彦宁", "齐纶"]
+        self.ends = ["常沄", "资源", "彦宁", "齐纶", "赵昭", "裴令容", "阿禾"]
         self.config_description.update({
             self.CFG_SCROLL_ENABLE: "启用后在对齐滑索时会自动滚动放大视角\n可能会提高对齐成功率，但也可能导致对齐成功率下降较为明显\n建议启用此项时不要使用非白发或有白帽角色",
             self.CFG_TEST_TARGET: "默认是无，表示正常执行相关任务\n也可以选择特定的滑索分叉序列来测试滑索功能\n选择完整循环测试则会依次测试每个送货目标的完整流程\n(需要锁定次要任务在送货任务上或附近)",
-            self.CFG_ONLY_ACCEPT: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n仅接取武陵委托，不送货',
-            self.CFG_ONLY_DELIVER: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n接取武陵委托后启动自动识别送货',
+            self.CFG_ONLY_ACCEPT: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n仅接取武陵地区委托，不送货',
+            self.CFG_ONLY_DELIVER: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n接取武陵地区委托后启动自动识别送货',
             self.CFG_TUTORIAL: self.TUTORIAL_TIPS,
             "发生异常时终止游戏": "勾选这个选项：如果「完成后退出」被选定，那么抛出异常也会退出游戏和App。",
         })
@@ -90,7 +90,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             "type": "drop_down",
             "options": ["119000","79800", "73100"],
         }
-        self.wuling_location = ["武陵城"]
+        self.wuling_location = ["武陵城", "试验园区"]
         self.valley_location = ["供能高地", "矿脉源区", "源石研究园"]
         self._last_refresh_ts = 0
         self.try_time = 0
@@ -500,6 +500,17 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                 self.wait_pop_up(after_sleep=2)
                 break
 
+    def _resolve_transfer_point_search_box(self):
+        """根据当前委托区域选择传送点搜索区域。"""
+        if self.wait_ocr(
+            match=re.compile("试验园区"),
+            box=self.box.left,
+            time_out=1,
+            log=True,
+        ):
+            return self.box.right
+        return self.box.top
+
     def _run_single_delivery_cycle(self):
         if self.config.get(self.CFG_TEST_TARGET) == self.TEST_NONE:
             ends_list_pattern_dict = {}
@@ -534,7 +545,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                         )
                     success = None
                     for _ in range(3):
-                        success = self.task_to_transfer_point()
+                        success = self.task_to_transfer_point(self._resolve_transfer_point_search_box())
                         if success:
                             break
                     if not success:
