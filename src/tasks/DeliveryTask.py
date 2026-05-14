@@ -68,6 +68,11 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         self.support_schedule_task = True
         self.support_multi_account = True
         self.ends = get_delivery_targets(self.delivery_area)
+        self.to_delivery_point_config_keys = list(
+            dict.fromkeys(
+                [self._to_delivery_point_config_key(location_name) for location_name in self.full_cycle_locations]
+            )
+        )
         self.config_description.update({
             self.CFG_SCROLL_ENABLE: "启用后在对齐滑索时会自动滚动放大视角\n可能会提高对齐成功率，但也可能导致对齐成功率下降较为明显\n建议启用此项时不要使用非白发或有白帽角色",
             self.CFG_TEST_TARGET: "默认是无，表示正常执行相关任务\n也可以选择特定的滑索分叉序列来测试滑索功能\n选择完整循环测试则会依次测试每个送货目标的完整流程\n(需要锁定次要任务在送货任务上或附近)",
@@ -77,11 +82,11 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             self.CFG_TUTORIAL: self.TUTORIAL_TIPS,
             "发生异常时终止游戏": "勾选这个选项：如果「完成后退出」被选定，那么抛出异常也会退出游戏和App。",
         })
-        self.default_config_group.update({"滑索配置": [self.CFG_TO_DELIVERY_POINT] + self.ends})
+        self.default_config_group.update({"滑索配置": self.to_delivery_point_config_keys + self.ends})
         self.default_config.update(
             {
                 self.CFG_TARGET_TICKET_NUM: "119000",
-                **{x: "" for x in [self.CFG_TO_DELIVERY_POINT] + self.ends},
+                **{x: "" for x in self.to_delivery_point_config_keys + self.ends},
                 self.CFG_SCROLL_ENABLE: False,
                 self.CFG_ONLY_ACCEPT: False,
                 self.CFG_ONLY_DELIVER: False,
@@ -98,7 +103,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         }
         self.config_type[self.CFG_TEST_TARGET] = {
             "type": "drop_down",
-            "options": [self.TEST_NONE, self.CFG_TO_DELIVERY_POINT] + self.ends + [self.TEST_FULL_CYCLE],
+            "options": [self.TEST_NONE] + self.to_delivery_point_config_keys + self.ends + [self.TEST_FULL_CYCLE],
         }
         self.config_type[self.CFG_TARGET_TICKET_NUM] = {
             "type": "drop_down",
@@ -352,6 +357,19 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         else:
             self.log_info(f"未能从委托行识别地点，稍后将回退OCR判定: {first_name}")
 
+    def _to_delivery_point_config_key(self, location_name: str | None) -> str:
+        if not location_name or location_name == "武陵城":
+            return self.CFG_TO_DELIVERY_POINT
+        return f"{self.CFG_TO_DELIVERY_POINT}{location_name}"
+
+    def _resolve_to_delivery_point_config_key(self) -> str:
+        location_name = self._accepted_delivery_location
+        if location_name:
+            location_key = self._to_delivery_point_config_key(location_name)
+            if self.config.get(location_key):
+                return location_key
+        return self.CFG_TO_DELIVERY_POINT
+
     def other_run(self):
         """接取运输委托的主流程
         
@@ -471,7 +489,8 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             if self.wait_ocr(match="工业", box=self.box.top_left, time_out=2, log=True):
                 self.press_key("tab", after_sleep=1)
             self.click_with_alt(result[0], after_sleep=2)
-            self.zip_line_list_go(parse_int_sequence(self.config.get(self.CFG_TO_DELIVERY_POINT)),
+            to_delivery_point_key = self._resolve_to_delivery_point_config_key()
+            self.zip_line_list_go(parse_int_sequence(self.config.get(to_delivery_point_key)),
                                   need_scroll=self.config.get(self.CFG_SCROLL_ENABLE),
                                   target=(secondary_objective_direction_dot, "feature"),
                                   need_v=True)  # 需要在配置里指定出发点的滑索距离,这里默认是36m的滑索
