@@ -358,7 +358,9 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             self.log_info(f"未能从委托行识别地点，稍后将回退OCR判定: {first_name}")
 
     def _to_delivery_point_config_key(self, location_name: str | None) -> str:
-        if not location_name or location_name == "武陵城":
+        if location_name is None:
+            return self.CFG_TO_DELIVERY_POINT
+        if location_name == "武陵城":
             return self.CFG_TO_DELIVERY_POINT
         return f"{self.CFG_TO_DELIVERY_POINT}{location_name}"
 
