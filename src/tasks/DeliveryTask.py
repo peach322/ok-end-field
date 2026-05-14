@@ -13,6 +13,7 @@ from src.data.delivery_area import (
     extract_delivery_location,
     get_delivery_locations,
     get_delivery_targets,
+    get_full_cycle_targets,
     get_ocr_priority_locations,
     get_transfer_search_area_key,
 )
@@ -49,6 +50,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
     CFG_ONLY_DELIVER = "仅送货"
     CFG_TUTORIAL = "教程"
     CFG_TO_DELIVERY_POINT = "通向送货点"
+    CFG_FULL_CYCLE_LOCATION = "完整循环测试区域"
     TUTORIAL_LINK = "https://www.bilibili.com/video/BV1LLc7zFEF9"
     TUTORIAL_TIPS = "游戏内开启全屏模式时请确保游戏内分辨率与你的屏幕分辨率一致"
 
@@ -62,6 +64,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         self.name = "自动送货"
         self.description = "武陵地区送货（武陵城/试验园区）,教程视频 BV1LLc7zFEF9"
         self.delivery_area = DEFAULT_DELIVERY_AREA
+        self.full_cycle_locations = get_delivery_locations(self.delivery_area)
         self.support_schedule_task = True
         self.support_multi_account = True
         self.ends = get_delivery_targets(self.delivery_area)
@@ -70,6 +73,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             self.CFG_TEST_TARGET: "默认是无，表示正常执行相关任务\n也可以选择特定的滑索分叉序列来测试滑索功能\n选择完整循环测试则会依次测试每个送货目标的完整流程\n(需要锁定次要任务在送货任务上或附近)",
             self.CFG_ONLY_ACCEPT: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n仅接取武陵地区委托，不送货',
             self.CFG_ONLY_DELIVER: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n接取武陵地区委托后启动自动识别送货',
+            self.CFG_FULL_CYCLE_LOCATION: "仅在“完整循环测试”时生效，用于限定测试的小区域（武陵城/试验园区）",
             self.CFG_TUTORIAL: self.TUTORIAL_TIPS,
             "发生异常时终止游戏": "勾选这个选项：如果「完成后退出」被选定，那么抛出异常也会退出游戏和App。",
         })
@@ -82,6 +86,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                 self.CFG_ONLY_ACCEPT: False,
                 self.CFG_ONLY_DELIVER: False,
                 self.CFG_TEST_TARGET: self.TEST_NONE,
+                self.CFG_FULL_CYCLE_LOCATION: self.full_cycle_locations[0],
                 "发生异常时终止游戏": False,
             }
         )
@@ -98,6 +103,10 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         self.config_type[self.CFG_TARGET_TICKET_NUM] = {
             "type": "drop_down",
             "options": ["119000","79800", "73100"],
+        }
+        self.config_type[self.CFG_FULL_CYCLE_LOCATION] = {
+            "type": "drop_down",
+            "options": self.full_cycle_locations,
         }
         self.wuling_location = get_delivery_locations(self.delivery_area)
         self.valley_location = ["供能高地", "矿脉源区", "源石研究园"]
@@ -623,7 +632,12 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                     if self.config.get(self.CFG_ONLY_DELIVER):
                         break
         elif self.config.get(self.CFG_TEST_TARGET) == self.TEST_FULL_CYCLE:
-            for end in self.ends:
+            test_location = self.config.get(self.CFG_FULL_CYCLE_LOCATION)
+            full_cycle_targets = get_full_cycle_targets(self.delivery_area, test_location)
+            if not full_cycle_targets:
+                self.log_info(f"未配置完整循环测试目标区域: {test_location}")
+                return
+            for end in full_cycle_targets:
                 self.task_to_transfer_point(self.box.bottom)
                 self.to_storage_point_and_back_zip_line(only_zip_line=True)
                 if self.wait_click_ocr(
