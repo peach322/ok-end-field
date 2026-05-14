@@ -12,6 +12,7 @@ from src.data.FeatureList import FeatureList as fL
 from src.tasks.account.account_mixin import AccountMixin
 from src.tasks.delivery_location import (
     WULING_DELIVERY_LOCATIONS,
+    WULING_OCR_PRIORITY_LOCATIONS,
     extract_delivery_location,
     get_transfer_search_area_key,
 )
@@ -418,7 +419,12 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                                     self.log_info("尝试次数过多，退出")
                                     return False
                                 self.next_frame()
-                                if not self.wait_ocr(match="接取运送委托", box=self.box.bottom_right, time_out=1):
+                                accepted_successfully = not self.wait_ocr(
+                                    match="接取运送委托",
+                                    box=self.box.bottom_right,
+                                    time_out=1
+                                )
+                                if accepted_successfully:
                                     self._remember_delivery_location(row)
                                     self.log_info("接取成功")
                                     return True
@@ -529,7 +535,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         cached_box = self._get_transfer_search_box_by_location(self._accepted_delivery_location)
         if cached_box:
             return cached_box
-        for location_name in WULING_DELIVERY_LOCATIONS[::-1]:
+        for location_name in WULING_OCR_PRIORITY_LOCATIONS:
             if self.wait_ocr(
                 match=re.compile(location_name),
                 box=self.box.left,
