@@ -10,6 +10,11 @@ from qfluentwidgets import FluentIcon
 
 from src.data.FeatureList import FeatureList as fL
 from src.tasks.account.account_mixin import AccountMixin
+from src.tasks.delivery_location import (
+    WULING_DELIVERY_LOCATIONS,
+    extract_delivery_location,
+    get_transfer_search_area_key,
+)
 from src.tasks.sequence_parser import parse_int_sequence
 from src.tasks.mixin.map_mixin import MapMixin
 from src.tasks.mixin.zip_line_mixin import ZipLineMixin
@@ -90,7 +95,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             "type": "drop_down",
             "options": ["119000","79800", "73100"],
         }
-        self.wuling_location = ["武陵城", "试验园区"]
+        self.wuling_location = list(WULING_DELIVERY_LOCATIONS)
         self.valley_location = ["供能高地", "矿脉源区", "源石研究园"]
         self._accepted_delivery_location = None
         self._last_refresh_ts = 0
@@ -318,23 +323,17 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         return None
 
     def _get_transfer_search_box_by_location(self, location_name):
-        if location_name == "试验园区":
+        area_key = get_transfer_search_area_key(location_name)
+        if area_key == "right":
             return self.box.right
-        if location_name == "武陵城":
+        if area_key == "top":
             return self.box.top
-        return None
-
-    def _extract_delivery_location(self, text: str):
-        if "试验园区" in text:
-            return "试验园区"
-        if "武陵城" in text:
-            return "武陵城"
         return None
 
     def _remember_delivery_location(self, row: DeliveryRow):
         """从接取到的委托行里缓存地点信息，供后续传送点搜索复用。"""
         first_name = row.elems[0].name
-        self._accepted_delivery_location = self._extract_delivery_location(first_name)
+        self._accepted_delivery_location = extract_delivery_location(first_name)
         if self._accepted_delivery_location:
             self.log_info(f"已缓存委托地点: {self._accepted_delivery_location}")
         else:
@@ -530,7 +529,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         cached_box = self._get_transfer_search_box_by_location(self._accepted_delivery_location)
         if cached_box:
             return cached_box
-        for location_name in ("试验园区", "武陵城"):
+        for location_name in WULING_DELIVERY_LOCATIONS[::-1]:
             if self.wait_ocr(
                 match=re.compile(location_name),
                 box=self.box.left,
