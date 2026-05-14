@@ -3,7 +3,6 @@ DEFAULT_DELIVERY_AREA = "武陵"
 DELIVERY_AREA_CONFIG = {
     "武陵": {
         "delivery_locations": ["武陵城", "试验园区"],
-        "delivery_targets": ["常沄", "资源", "彦宁", "齐纶", "赵昭", "裴令容", "阿禾"],
         "delivery_targets_by_location": {
             "武陵城": ["常沄", "资源", "彦宁", "齐纶"],
             "试验园区": ["赵昭", "裴令容", "阿禾"],
@@ -29,7 +28,12 @@ def get_delivery_locations(area_name: str) -> list[str]:
 
 
 def get_delivery_targets(area_name: str) -> list[str]:
-    return _get_area_config(area_name)["delivery_targets"]
+    area_config = _get_area_config(area_name)
+    targets_by_location = area_config["delivery_targets_by_location"]
+    targets = []
+    for location_name in area_config["delivery_locations"]:
+        targets.extend(targets_by_location.get(location_name, []))
+    return targets
 
 
 def get_ocr_priority_locations(area_name: str) -> list[str]:
