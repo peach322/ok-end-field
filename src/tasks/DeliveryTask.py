@@ -317,15 +317,28 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             return "ticket_valley"
         return None
 
+    def _get_transfer_search_box_by_location(self, location_name):
+        if location_name == "试验园区":
+            return self.box.right
+        if location_name == "武陵城":
+            return self.box.top
+        return None
+
+    def _extract_delivery_location(self, text: str):
+        if "试验园区" in text:
+            return "试验园区"
+        if "武陵城" in text:
+            return "武陵城"
+        return None
+
     def _remember_delivery_location(self, row: DeliveryRow):
         """从接取到的委托行里缓存地点信息，供后续传送点搜索复用。"""
         first_name = row.elems[0].name
-        if "试验园区" in first_name:
-            self._accepted_delivery_location = "试验园区"
-        elif "武陵城" in first_name:
-            self._accepted_delivery_location = "武陵城"
+        self._accepted_delivery_location = self._extract_delivery_location(first_name)
+        if self._accepted_delivery_location:
+            self.log_info(f"已缓存委托地点: {self._accepted_delivery_location}")
         else:
-            self._accepted_delivery_location = None
+            self.log_info(f"未能从委托行识别地点，稍后将回退OCR判定: {first_name}")
 
     def other_run(self):
         """接取运输委托的主流程
@@ -408,10 +421,6 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                                 self.next_frame()
                                 if not self.wait_ocr(match="接取运送委托", box=self.box.bottom_right, time_out=1):
                                     self._remember_delivery_location(row)
-                                    if self._accepted_delivery_location:
-                                        self.log_info(f"已缓存委托地点: {self._accepted_delivery_location}")
-                                    else:
-                                        self.log_info(f"未能从委托行识别地点，稍后将回退OCR判定: {row.elems[0].name}")
                                     self.log_info("接取成功")
                                     return True
                                 else:
@@ -518,26 +527,18 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
 
     def _resolve_transfer_point_search_box(self):
         """根据当前委托区域选择传送点搜索区域。"""
-        if self._accepted_delivery_location == "试验园区":
-            return self.box.right
-        if self._accepted_delivery_location == "武陵城":
-            return self.box.top
-        if self.wait_ocr(
-            match=re.compile("试验园区"),
-            box=self.box.left,
-            time_out=1,
-            log=True,
-        ):
-            self._accepted_delivery_location = "试验园区"
-            return self.box.right
-        if self.wait_ocr(
-            match=re.compile("武陵城"),
-            box=self.box.left,
-            time_out=1,
-            log=True,
-        ):
-            self._accepted_delivery_location = "武陵城"
-            return self.box.top
+        cached_box = self._get_transfer_search_box_by_location(self._accepted_delivery_location)
+        if cached_box:
+            return cached_box
+        for location_name in ("试验园区", "武陵城"):
+            if self.wait_ocr(
+                match=re.compile(location_name),
+                box=self.box.left,
+                time_out=1,
+                log=True,
+            ):
+                self._accepted_delivery_location = location_name
+                return self._get_transfer_search_box_by_location(location_name)
         self.log_info("未识别到明确委托地点，默认按武陵城方向搜索传送点")
         return self.box.top
 
