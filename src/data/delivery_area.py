@@ -17,20 +17,27 @@ DELIVERY_AREA_CONFIG = {
 }
 
 
+def _get_area_config(area_name: str) -> dict:
+    if area_name not in DELIVERY_AREA_CONFIG:
+        supported = "、".join(DELIVERY_AREA_CONFIG.keys())
+        raise ValueError(f"不支持的送货区域: {area_name}，当前支持: {supported}")
+    return DELIVERY_AREA_CONFIG[area_name]
+
+
 def get_delivery_locations(area_name: str) -> list[str]:
-    return DELIVERY_AREA_CONFIG[area_name]["delivery_locations"]
+    return _get_area_config(area_name)["delivery_locations"]
 
 
 def get_delivery_targets(area_name: str) -> list[str]:
-    return DELIVERY_AREA_CONFIG[area_name]["delivery_targets"]
+    return _get_area_config(area_name)["delivery_targets"]
 
 
 def get_ocr_priority_locations(area_name: str) -> list[str]:
-    return DELIVERY_AREA_CONFIG[area_name]["ocr_priority_locations"]
+    return _get_area_config(area_name)["ocr_priority_locations"]
 
 
 def get_full_cycle_targets(area_name: str, location_name: str) -> list[str]:
-    return DELIVERY_AREA_CONFIG[area_name]["delivery_targets_by_location"].get(location_name, [])
+    return _get_area_config(area_name)["delivery_targets_by_location"].get(location_name, [])
 
 
 def extract_delivery_location(text: str, area_name: str) -> str | None:
@@ -41,4 +48,4 @@ def extract_delivery_location(text: str, area_name: str) -> str | None:
 
 
 def get_transfer_search_area_key(location_name: str | None, area_name: str) -> str | None:
-    return DELIVERY_AREA_CONFIG[area_name]["transfer_search_area"].get(location_name)
+    return _get_area_config(area_name)["transfer_search_area"].get(location_name)
