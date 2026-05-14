@@ -92,6 +92,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         }
         self.wuling_location = ["武陵城", "试验园区"]
         self.valley_location = ["供能高地", "矿脉源区", "源石研究园"]
+        self._accepted_delivery_location = None
         self._last_refresh_ts = 0
         self.try_time = 0
         self.add_exit_after_config()
@@ -316,6 +317,14 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             return "ticket_valley"
         return None
 
+    def _remember_delivery_location(self, row: DeliveryRow):
+        """从接取到的委托行里缓存地点信息，供后续传送点搜索复用。"""
+        first_name = row.elems[0].name
+        if "试验园区" in first_name:
+            self._accepted_delivery_location = "试验园区"
+        elif "武陵城" in first_name:
+            self._accepted_delivery_location = "武陵城"
+
     def other_run(self):
         """接取运输委托的主流程
         
@@ -396,6 +405,8 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                                     return False
                                 self.next_frame()
                                 if not self.wait_ocr(match="接取运送委托", box=self.box.bottom_right, time_out=1):
+                                    self._remember_delivery_location(row)
+                                    self.log_info(f"已缓存委托地点: {self._accepted_delivery_location}")
                                     self.log_info("接取成功")
                                     return True
                                 else:
@@ -502,13 +513,19 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
 
     def _resolve_transfer_point_search_box(self):
         """根据当前委托区域选择传送点搜索区域。"""
+        if self._accepted_delivery_location == "试验园区":
+            return self.box.right
+        if self._accepted_delivery_location == "武陵城":
+            return self.box.top
         if self.wait_ocr(
             match=re.compile("试验园区"),
             box=self.box.left,
             time_out=1,
             log=True,
         ):
+            self._accepted_delivery_location = "试验园区"
             return self.box.right
+        self._accepted_delivery_location = "武陵城"
         return self.box.top
 
     def _run_single_delivery_cycle(self):
@@ -522,6 +539,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
 
                 ends_list_pattern_dict[pattern] = end
             for _ in range(3):
+                self._accepted_delivery_location = None
                 if not self._logged_in:
                     self.ensure_main(time_out=600)
                 else:
