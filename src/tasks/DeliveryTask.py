@@ -8,14 +8,16 @@ from typing import List, Tuple
 from ok import Box, TaskDisabledException
 from qfluentwidgets import FluentIcon
 
-from src.data.FeatureList import FeatureList as fL
-from src.tasks.account.account_mixin import AccountMixin
-from src.tasks.delivery_location import (
-    WULING_DELIVERY_LOCATIONS,
-    WULING_OCR_PRIORITY_LOCATIONS,
+from src.data.delivery_area import (
+    DEFAULT_DELIVERY_AREA,
     extract_delivery_location,
+    get_delivery_locations,
+    get_delivery_targets,
+    get_ocr_priority_locations,
     get_transfer_search_area_key,
 )
+from src.data.FeatureList import FeatureList as fL
+from src.tasks.account.account_mixin import AccountMixin
 from src.tasks.sequence_parser import parse_int_sequence
 from src.tasks.mixin.map_mixin import MapMixin
 from src.tasks.mixin.zip_line_mixin import ZipLineMixin
@@ -59,9 +61,10 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         self.default_config.update({"_enabled": True})
         self.name = "自动送货"
         self.description = "武陵地区送货（武陵城/试验园区）,教程视频 BV1LLc7zFEF9"
+        self.delivery_area = DEFAULT_DELIVERY_AREA
         self.support_schedule_task = True
         self.support_multi_account = True
-        self.ends = ["常沄", "资源", "彦宁", "齐纶", "赵昭", "裴令容", "阿禾"]
+        self.ends = get_delivery_targets(self.delivery_area)
         self.config_description.update({
             self.CFG_SCROLL_ENABLE: "启用后在对齐滑索时会自动滚动放大视角\n可能会提高对齐成功率，但也可能导致对齐成功率下降较为明显\n建议启用此项时不要使用非白发或有白帽角色",
             self.CFG_TEST_TARGET: "默认是无，表示正常执行相关任务\n也可以选择特定的滑索分叉序列来测试滑索功能\n选择完整循环测试则会依次测试每个送货目标的完整流程\n(需要锁定次要任务在送货任务上或附近)",
@@ -96,7 +99,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             "type": "drop_down",
             "options": ["119000","79800", "73100"],
         }
-        self.wuling_location = list(WULING_DELIVERY_LOCATIONS)
+        self.wuling_location = get_delivery_locations(self.delivery_area)
         self.valley_location = ["供能高地", "矿脉源区", "源石研究园"]
         self._accepted_delivery_location = None
         self._last_refresh_ts = 0
@@ -324,7 +327,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         return None
 
     def _get_transfer_search_box_by_location(self, location_name):
-        area_key = get_transfer_search_area_key(location_name)
+        area_key = get_transfer_search_area_key(location_name, self.delivery_area)
         if area_key == "right":
             return self.box.right
         if area_key == "top":
@@ -334,7 +337,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
     def _remember_delivery_location(self, row: DeliveryRow):
         """从接取到的委托行里缓存地点信息，供后续传送点搜索复用。"""
         first_name = row.elems[0].name
-        self._accepted_delivery_location = extract_delivery_location(first_name)
+        self._accepted_delivery_location = extract_delivery_location(first_name, self.delivery_area)
         if self._accepted_delivery_location:
             self.log_info(f"已缓存委托地点: {self._accepted_delivery_location}")
         else:
@@ -535,7 +538,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         cached_box = self._get_transfer_search_box_by_location(self._accepted_delivery_location)
         if cached_box:
             return cached_box
-        for location_name in WULING_OCR_PRIORITY_LOCATIONS:
+        for location_name in get_ocr_priority_locations(self.delivery_area):
             if self.wait_ocr(
                 match=re.compile(location_name),
                 box=self.box.left,
