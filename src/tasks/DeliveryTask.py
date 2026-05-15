@@ -10,6 +10,9 @@ from qfluentwidgets import FluentIcon
 
 from src.data.delivery_area import (
     DEFAULT_DELIVERY_AREA,
+    DELIVERY_AREA_CONFIG,
+)
+from src.data.delivery_area_service import (
     extract_delivery_location,
     get_delivery_locations,
     get_delivery_targets,
@@ -48,6 +51,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
     CFG_ONLY_ACCEPT = "仅接取"
     CFG_ONLY_DELIVER = "仅送货"
     CFG_TUTORIAL = "教程"
+    CFG_DELIVERY_AREA = "地区切换"
     CFG_TO_DELIVERY_POINT = "通向送货点"
     CFG_FULL_CYCLE_LOCATION = "完整循环测试区域"
     TUTORIAL_LINK = "https://www.bilibili.com/video/BV1LLc7zFEF9"
@@ -62,7 +66,10 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         self.default_config.update({"_enabled": True})
         self.name = "自动送货"
         self.description = "武陵地区送货（武陵城/试验园区）,教程视频 BV1LLc7zFEF9"
-        self.delivery_area = DEFAULT_DELIVERY_AREA
+        selected_delivery_area = self.config.get(self.CFG_DELIVERY_AREA, DEFAULT_DELIVERY_AREA)
+        if selected_delivery_area not in DELIVERY_AREA_CONFIG:
+            selected_delivery_area = DEFAULT_DELIVERY_AREA
+        self.delivery_area = selected_delivery_area
         self.full_cycle_locations = get_delivery_locations(self.delivery_area)
         self.support_schedule_task = True
         self.support_multi_account = True
@@ -74,6 +81,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         )
         self.config_description.update({
             self.CFG_SCROLL_ENABLE: "启用后在对齐滑索时会自动滚动放大视角\n可能会提高对齐成功率，但也可能导致对齐成功率下降较为明显\n建议启用此项时不要使用非白发或有白帽角色",
+            self.CFG_DELIVERY_AREA: "通过下拉框切换送货地区配置",
             self.CFG_TEST_TARGET: "默认是无，表示正常执行相关任务\n也可以选择特定的滑索分叉序列来测试滑索功能\n选择完整循环测试则会依次测试每个送货目标的完整流程\n(需要锁定次要任务在送货任务上或附近)",
             self.CFG_ONLY_ACCEPT: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n仅接取武陵地区委托，不送货',
             self.CFG_ONLY_DELIVER: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n接取武陵地区委托后启动自动识别送货',
@@ -87,6 +95,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                 self.CFG_TARGET_TICKET_NUM: "119000",
                 **{x: "" for x in self.to_delivery_point_config_keys + self.ends},
                 self.CFG_SCROLL_ENABLE: False,
+                self.CFG_DELIVERY_AREA: self.delivery_area,
                 self.CFG_ONLY_ACCEPT: False,
                 self.CFG_ONLY_DELIVER: False,
                 self.CFG_TEST_TARGET: self.TEST_NONE,
@@ -104,6 +113,10 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             "type": "drop_down",
             "options": [self.TEST_NONE] + self.to_delivery_point_config_keys + self.ends + [self.TEST_FULL_CYCLE],
         }
+        self.config_type[self.CFG_DELIVERY_AREA] = {
+            "type": "drop_down",
+            "options": list(DELIVERY_AREA_CONFIG.keys()),
+        }
         self.config_type[self.CFG_TARGET_TICKET_NUM] = {
             "type": "drop_down",
             "options": ["119000","79800", "73100"],
@@ -112,7 +125,6 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             "type": "drop_down",
             "options": self.full_cycle_locations,
         }
-        self.wuling_location = get_delivery_locations(self.delivery_area)
         self._accepted_delivery_location = None
         self._last_refresh_ts = 0
         self.try_time = 0
@@ -707,6 +719,28 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
     def run(self):
         """运输委托任务的主入口，支持与日常任务一致的多账号执行逻辑。"""
         try:
+            current_area = self.config.get(self.CFG_DELIVERY_AREA, DEFAULT_DELIVERY_AREA)
+            if current_area not in DELIVERY_AREA_CONFIG:
+                self.log_info(f"配置的地区({current_area})无效，回退为默认地区({DEFAULT_DELIVERY_AREA})")
+                current_area = DEFAULT_DELIVERY_AREA
+            if current_area != self.delivery_area:
+                self.delivery_area = current_area
+                self.full_cycle_locations = get_delivery_locations(self.delivery_area)
+                self.ends = get_delivery_targets(self.delivery_area)
+                self.to_delivery_point_config_keys = list(
+                    dict.fromkeys(
+                        [self._to_delivery_point_config_key(location_name) for location_name in self.full_cycle_locations]
+                    )
+                )
+                self.default_config_group.update({"滑索配置": self.to_delivery_point_config_keys + self.ends})
+                if self.config.get(self.CFG_FULL_CYCLE_LOCATION) not in self.full_cycle_locations:
+                    self.config[self.CFG_FULL_CYCLE_LOCATION] = self.full_cycle_locations[0]
+                self.config_type[self.CFG_TEST_TARGET]["options"] = (
+                    [self.TEST_NONE] + self.to_delivery_point_config_keys + self.ends + [self.TEST_FULL_CYCLE]
+                )
+                self.config_type[self.CFG_FULL_CYCLE_LOCATION]["options"] = self.full_cycle_locations
+                for key in self.to_delivery_point_config_keys + self.ends:
+                    self.config.setdefault(key, "")
             allow_multi = self.config.get(self.CFG_TEST_TARGET) == self.TEST_NONE
             for repeat_idx, repeat_times in self.iter_multi_account_context(
                 repeat_times=1,
