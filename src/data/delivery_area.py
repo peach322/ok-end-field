@@ -8,8 +8,8 @@ DELIVERY_AREA_CONFIG = {
             "试验园区": ["赵昭", "裴令容", "阿禾"],
         },
         "transfer_search_area": {
-            "武陵城": "top",
-            "试验园区": "right",
+            "武陵城": {"preset": "top"},
+            "试验园区": {"preset": "right"},
         },
         "ocr_priority_locations": ["试验园区", "武陵城"],
     }
@@ -51,5 +51,5 @@ def extract_delivery_location(text: str, area_name: str) -> str | None:
     return None
 
 
-def get_transfer_search_area_key(location_name: str | None, area_name: str) -> str | None:
+def get_transfer_search_area(location_name: str | None, area_name: str):
     return _get_area_config(area_name)["transfer_search_area"].get(location_name)

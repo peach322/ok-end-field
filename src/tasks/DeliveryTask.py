@@ -14,8 +14,7 @@ from src.data.delivery_area import (
     get_delivery_locations,
     get_delivery_targets,
     get_full_cycle_targets,
-    get_ocr_priority_locations,
-    get_transfer_search_area_key,
+    get_transfer_search_area,
 )
 from src.data.FeatureList import FeatureList as fL
 from src.tasks.account.account_mixin import AccountMixin
@@ -340,13 +339,30 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             return "ticket_valley"
         return None
 
-    def _get_transfer_search_box_by_location(self, location_name):
-        area_key = get_transfer_search_area_key(location_name, self.delivery_area)
-        if area_key == "right":
-            return self.box.right
-        if area_key == "top":
-            return self.box.top
+    def _resolve_transfer_search_box(self, area_config):
+        if area_config is None:
+            return None
+        if isinstance(area_config, str):
+            return getattr(self.box, area_config, None)
+        if not isinstance(area_config, dict):
+            return None
+
+        preset = area_config.get("preset")
+        if preset:
+            return getattr(self.box, preset, None)
+
+        if all(k in area_config for k in ("x", "y", "to_x", "to_y")):
+            return self.box_of_screen(
+                area_config["x"],
+                area_config["y"],
+                area_config["to_x"],
+                area_config["to_y"],
+            )
         return None
+
+    def _get_transfer_search_box_by_location(self, location_name):
+        area_config = get_transfer_search_area(location_name, self.delivery_area)
+        return self._resolve_transfer_search_box(area_config)
 
     def _remember_delivery_location(self, row: DeliveryRow):
         """从接取到的委托行里缓存地点信息，供后续传送点搜索复用。"""
@@ -355,7 +371,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         if self._accepted_delivery_location:
             self.log_info(f"已缓存委托地点: {self._accepted_delivery_location}")
         else:
-            self.log_info(f"未能从委托行识别地点，稍后将回退OCR判定: {first_name}")
+            self.log_info(f"未能从委托行识别地点，将直接判定送货失败: {first_name}")
 
     def _to_delivery_point_config_key(self, location_name: str | None) -> str:
         if location_name is None:
@@ -568,17 +584,11 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         cached_box = self._get_transfer_search_box_by_location(self._accepted_delivery_location)
         if cached_box:
             return cached_box
-        for location_name in get_ocr_priority_locations(self.delivery_area):
-            if self.wait_ocr(
-                match=re.compile(location_name),
-                box=self.box.left,
-                time_out=1,
-                log=True,
-            ):
-                self._accepted_delivery_location = location_name
-                return self._get_transfer_search_box_by_location(location_name)
-        self.log_info("未识别到明确委托地点，默认按武陵城方向搜索传送点")
-        return self.box.top
+        if self._accepted_delivery_location:
+            self.log_info(f"委托地点({self._accepted_delivery_location})未配置传送搜索区域，送货失败")
+        else:
+            self.log_info("未缓存委托地点，送货失败")
+        return None
 
     def _run_single_delivery_cycle(self):
         if self.config.get(self.CFG_TEST_TARGET) == self.TEST_NONE:
@@ -615,7 +625,10 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                         )
                     success = None
                     for _ in range(3):
-                        success = self.task_to_transfer_point(self._resolve_transfer_point_search_box())
+                        search_box = self._resolve_transfer_point_search_box()
+                        if search_box is None:
+                            return
+                        success = self.task_to_transfer_point(search_box)
                         if success:
                             break
                     if not success:
