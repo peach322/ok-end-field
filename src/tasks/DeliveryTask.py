@@ -113,7 +113,6 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             "options": self.full_cycle_locations,
         }
         self.wuling_location = get_delivery_locations(self.delivery_area)
-        self.valley_location = ["供能高地", "矿脉源区", "源石研究园"]
         self._accepted_delivery_location = None
         self._last_refresh_ts = 0
         self.try_time = 0
@@ -332,11 +331,8 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             str: 票券类型("ticket_wuling"或"ticket_valley")或None
         """
         first_name = row.elems[0].name
-        if any(k in first_name for k in self.wuling_location):
+        if extract_delivery_location(first_name, self.delivery_area):
             return "ticket_wuling"
-
-        if any(k in first_name for k in self.valley_location):
-            return "ticket_valley"
         return None
 
     def _resolve_transfer_search_box(self, area_config):
@@ -380,13 +376,18 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             return self.CFG_TO_DELIVERY_POINT
         return f"{self.CFG_TO_DELIVERY_POINT}{location_name}"
 
-    def _resolve_to_delivery_point_config_key(self) -> str:
+    def _resolve_to_delivery_point_config_key(self) -> str | None:
         location_name = self._accepted_delivery_location
-        if location_name:
-            location_key = self._to_delivery_point_config_key(location_name)
-            if self.config.get(location_key):
-                return location_key
-        return self.CFG_TO_DELIVERY_POINT
+        if not location_name:
+            self.log_info("未缓存委托地点，无法选择对应的送货点滑索配置")
+            return None
+
+        location_key = self._to_delivery_point_config_key(location_name)
+        if self.config.get(location_key):
+            return location_key
+
+        self.log_info(f"委托地点({location_name})未配置送货点滑索参数: {location_key}")
+        return None
 
     def other_run(self):
         """接取运输委托的主流程
@@ -508,7 +509,13 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                 self.press_key("tab", after_sleep=1)
             self.click_with_alt(result[0], after_sleep=2)
             to_delivery_point_key = self._resolve_to_delivery_point_config_key()
-            self.zip_line_list_go(parse_int_sequence(self.config.get(to_delivery_point_key)),
+            if not to_delivery_point_key:
+                return False
+            zip_line_list = parse_int_sequence(self.config.get(to_delivery_point_key))
+            if not zip_line_list:
+                self.log_info(f"送货点滑索配置为空: {to_delivery_point_key}")
+                return False
+            self.zip_line_list_go(zip_line_list,
                                   need_scroll=self.config.get(self.CFG_SCROLL_ENABLE),
                                   target=(secondary_objective_direction_dot, "feature"),
                                   need_v=True)  # 需要在配置里指定出发点的滑索距离,这里默认是36m的滑索
@@ -672,6 +679,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             if not full_cycle_targets:
                 self.log_info(f"未配置完整循环测试目标区域: {test_location}")
                 return
+            self._accepted_delivery_location = test_location
             for end in full_cycle_targets:
                 self.task_to_transfer_point(self.box.bottom)
                 self.to_storage_point_and_back_zip_line(only_zip_line=True)
