@@ -51,7 +51,7 @@ def extract_delivery_location(text: str, area_name: str) -> str | None:
     return None
 
 
-def get_transfer_search_area(location_name: str | None, area_name: str):
+def get_transfer_search_area(location_name: str | None, area_name: str) -> dict | None:
     """返回指定委托地点的传送点搜索区域配置。
 
     返回值支持两种格式：
