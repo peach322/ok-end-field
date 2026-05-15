@@ -52,4 +52,10 @@ def extract_delivery_location(text: str, area_name: str) -> str | None:
 
 
 def get_transfer_search_area(location_name: str | None, area_name: str):
+    """返回指定委托地点的传送点搜索区域配置。
+
+    返回值支持两种格式：
+    1) {"preset": "<screen_position_name>"}，对应 ScreenPosition 的预设区域；
+    2) {"x": float, "y": float, "to_x": float, "to_y": float}，按屏幕比例定义自定义区域。
+    """
     return _get_area_config(area_name)["transfer_search_area"].get(location_name)
