@@ -627,7 +627,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                     for _ in range(3):
                         search_box = self._resolve_transfer_point_search_box()
                         if search_box is None:
-                            self.log_info("传送点搜索区域无效，终止本轮送货")
+                            self.log_info("未能确定传送点搜索区域（地点未缓存或配置缺失），终止本轮送货")
                             return
                         success = self.task_to_transfer_point(search_box)
                         if success:

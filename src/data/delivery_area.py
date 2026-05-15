@@ -57,5 +57,6 @@ def get_transfer_search_area(location_name: str | None, area_name: str):
     返回值支持两种格式：
     1) {"preset": "<screen_position_name>"}，对应 ScreenPosition 的预设区域；
     2) {"x": float, "y": float, "to_x": float, "to_y": float}，按屏幕比例定义自定义区域。
+    若 location_name 为 None 或该地点未配置，则返回 None。
     """
     return _get_area_config(area_name)["transfer_search_area"].get(location_name)
