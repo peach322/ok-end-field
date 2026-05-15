@@ -61,35 +61,40 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
     TEST_NONE = "无"
     TEST_FULL_CYCLE = "完整循环测试"
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.default_config.update({"_enabled": True})
-        self.name = "自动送货"
-        self.description = "武陵地区送货（武陵城/试验园区）,教程视频 BV1LLc7zFEF9"
-        selected_delivery_area = self.config.get(self.CFG_DELIVERY_AREA, DEFAULT_DELIVERY_AREA)
-        if selected_delivery_area not in DELIVERY_AREA_CONFIG:
-            selected_delivery_area = DEFAULT_DELIVERY_AREA
-        self.delivery_area = selected_delivery_area
+    def _configure_delivery_area(self, area_name: str):
+        if area_name not in DELIVERY_AREA_CONFIG:
+            area_name = DEFAULT_DELIVERY_AREA
+        self.delivery_area = area_name
         self.full_cycle_locations = get_delivery_locations(self.delivery_area)
-        self.support_schedule_task = True
-        self.support_multi_account = True
         self.ends = get_delivery_targets(self.delivery_area)
         self.to_delivery_point_config_keys = list(
             dict.fromkeys(
                 [self._to_delivery_point_config_key(location_name) for location_name in self.full_cycle_locations]
             )
         )
+        self.default_config_group.update({"滑索配置": self.to_delivery_point_config_keys + self.ends})
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.default_config.update({"_enabled": True})
+        self.name = "自动送货"
+        self.description = "根据地区配置自动送货,教程视频 BV1LLc7zFEF9"
+        selected_delivery_area = self.config.get(self.CFG_DELIVERY_AREA, DEFAULT_DELIVERY_AREA)
+        if selected_delivery_area not in DELIVERY_AREA_CONFIG:
+            selected_delivery_area = DEFAULT_DELIVERY_AREA
+        self._configure_delivery_area(selected_delivery_area)
+        self.support_schedule_task = True
+        self.support_multi_account = True
         self.config_description.update({
             self.CFG_SCROLL_ENABLE: "启用后在对齐滑索时会自动滚动放大视角\n可能会提高对齐成功率，但也可能导致对齐成功率下降较为明显\n建议启用此项时不要使用非白发或有白帽角色",
             self.CFG_DELIVERY_AREA: "通过下拉框切换送货地区配置",
             self.CFG_TEST_TARGET: "默认是无，表示正常执行相关任务\n也可以选择特定的滑索分叉序列来测试滑索功能\n选择完整循环测试则会依次测试每个送货目标的完整流程\n(需要锁定次要任务在送货任务上或附近)",
-            self.CFG_ONLY_ACCEPT: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n仅接取武陵地区委托，不送货',
-            self.CFG_ONLY_DELIVER: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n接取武陵地区委托后启动自动识别送货',
-            self.CFG_FULL_CYCLE_LOCATION: "仅在“完整循环测试”时生效，用于限定测试的小区域（武陵城/试验园区）",
+            self.CFG_ONLY_ACCEPT: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n仅接取当前地区委托，不送货',
+            self.CFG_ONLY_DELIVER: f'前置是选择测试对象部分选择"{self.TEST_NONE}"\n接取当前地区委托后启动自动识别送货',
+            self.CFG_FULL_CYCLE_LOCATION: "仅在“完整循环测试”时生效，用于限定测试的小区域（当前地区可选地点）",
             self.CFG_TUTORIAL: self.TUTORIAL_TIPS,
             "发生异常时终止游戏": "勾选这个选项：如果「完成后退出」被选定，那么抛出异常也会退出游戏和App。",
         })
-        self.default_config_group.update({"滑索配置": self.to_delivery_point_config_keys + self.ends})
         self.default_config.update(
             {
                 self.CFG_TARGET_TICKET_NUM: "119000",
@@ -340,14 +345,15 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             row: DeliveryRow运输委托行对象
         
         Returns:
-            str: 票券类型("ticket_wuling"或"ticket_valley")或None
+            str: 票券类型("ticket_delivery_area")或None
         """
         first_name = row.elems[0].name
         if extract_delivery_location(first_name, self.delivery_area):
-            return "ticket_wuling"
+            return "ticket_delivery_area"
         return None
 
     def _resolve_transfer_search_box(self, area_config):
+        """将传送搜索配置解析为可用 box，支持 preset 与坐标两种配置。"""
         if area_config is None:
             return None
         if isinstance(area_config, str):
@@ -384,7 +390,8 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
     def _to_delivery_point_config_key(self, location_name: str | None) -> str:
         if location_name is None:
             return self.CFG_TO_DELIVERY_POINT
-        if location_name == "武陵城":
+        default_location = self.full_cycle_locations[0] if self.full_cycle_locations else None
+        if location_name == default_location:
             return self.CFG_TO_DELIVERY_POINT
         return f"{self.CFG_TO_DELIVERY_POINT}{location_name}"
 
@@ -419,10 +426,10 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             self.log_info("未找到‘运送委托列表’，退出")
             return False
         self.wait_ui_stable(refresh_interval=1)
-        enable_wuling = True
+        enable_delivery_area = True
         ticket_types = []
-        if enable_wuling:
-            ticket_types.append("ticket_wuling")
+        if enable_delivery_area:
+            ticket_types.append("ticket_delivery_area")
 
         if not ticket_types:
             self.log_info("警告: 未启用任何券种，任务退出")
@@ -436,7 +443,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             for row in rows:
                 if row:
                     ticket_type = self.detect_ticket_type(row)
-                    if ticket_type == "ticket_wuling" and enable_wuling:
+                    if ticket_type == "ticket_delivery_area" and enable_delivery_area:
                         if (
                                 "易损" in row.elems[2].name
                                 and "不易损" not in row.elems[2].name
@@ -689,11 +696,12 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
             test_location = self.config.get(self.CFG_FULL_CYCLE_LOCATION)
             full_cycle_targets = get_full_cycle_targets(self.delivery_area, test_location)
             if not full_cycle_targets:
-                self.log_info(f"未配置完整循环测试目标区域: {test_location}")
+                self.log_info(f"未配置测试区域({test_location})的送货目标")
                 return
             self._accepted_delivery_location = test_location
             for end in full_cycle_targets:
-                self.task_to_transfer_point(self.box.bottom)
+                transfer_search_box = self._get_transfer_search_box_by_location(test_location) or self.box.bottom
+                self.task_to_transfer_point(transfer_search_box)
                 self.to_storage_point_and_back_zip_line(only_zip_line=True)
                 if self.wait_click_ocr(
                     match="登上滑索架",
@@ -724,15 +732,7 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                 self.log_info(f"配置的地区({current_area})无效，回退为默认地区({DEFAULT_DELIVERY_AREA})")
                 current_area = DEFAULT_DELIVERY_AREA
             if current_area != self.delivery_area:
-                self.delivery_area = current_area
-                self.full_cycle_locations = get_delivery_locations(self.delivery_area)
-                self.ends = get_delivery_targets(self.delivery_area)
-                self.to_delivery_point_config_keys = list(
-                    dict.fromkeys(
-                        [self._to_delivery_point_config_key(location_name) for location_name in self.full_cycle_locations]
-                    )
-                )
-                self.default_config_group.update({"滑索配置": self.to_delivery_point_config_keys + self.ends})
+                self._configure_delivery_area(current_area)
                 if self.config.get(self.CFG_FULL_CYCLE_LOCATION) not in self.full_cycle_locations:
                     self.config[self.CFG_FULL_CYCLE_LOCATION] = self.full_cycle_locations[0]
                 self.config_type[self.CFG_TEST_TARGET]["options"] = (

@@ -37,4 +37,7 @@ def extract_delivery_location(text: str, area_name: str) -> str | None:
 
 
 def get_transfer_search_area(location_name: str | None, area_name: str) -> dict | None:
+    """返回指定地点的传送搜索配置；可能是 {"preset": "..."}、坐标字典或 None。"""
+    if location_name is None:
+        return None
     return _get_area_config(area_name)["transfer_search_area"].get(location_name)
