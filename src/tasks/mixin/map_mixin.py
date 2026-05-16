@@ -15,7 +15,8 @@ class MapMixin(BaseEfTask):
             return
         try:
             ocr_locations = get_ocr_priority_locations(area_name) or get_delivery_locations(area_name)
-        except Exception:
+        except Exception as exc:
+            self.log_debug(f"读取地点 OCR 配置失败，跳过地点回填: {exc}")
             return
         if not ocr_locations:
             return
