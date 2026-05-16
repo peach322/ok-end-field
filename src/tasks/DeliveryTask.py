@@ -20,7 +20,6 @@ from src.data.delivery_area_service import (
     get_delivery_target_ocr_pattern,
     get_delivery_targets,
     get_full_cycle_targets,
-    get_ocr_priority_locations,
     get_task_model_area,
     get_transfer_search_area,
 )
@@ -607,65 +606,8 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
         cached_box = self._get_transfer_search_box_by_location(self._accepted_delivery_location)
         if cached_box:
             return cached_box
-        if not self._accepted_delivery_location:
-            location_name = self._recover_delivery_location_from_map_hint()
-            if location_name:
-                cached_box = self._get_transfer_search_box_by_location(location_name)
-                if cached_box:
-                    return cached_box
-                self.log_info(f"委托地点({location_name})未配置传送搜索区域，送货失败")
-                return None
         if self._accepted_delivery_location:
             self.log_info(f"委托地点({self._accepted_delivery_location})未配置传送搜索区域，送货失败")
-        else:
-            self.log_info("未缓存委托地点，送货失败")
-        return None
-
-    def _recover_delivery_location_from_map_hint(self) -> str | None:
-        """无缓存时，通过“任务定位到地图”后的右上角地点文字回填委托地点。"""
-        self.log_info("未缓存委托地点，尝试从地图右上角地点文字识别")
-        self.ensure_main()
-        self.press_key("j", after_sleep=2)
-        map_jump_btn = self.find_feature(
-            feature_name="one_task_to_map",
-            threshold=0.8,
-            box=self.box.bottom_right,
-        )
-        if not map_jump_btn:
-            self.log_info("未找到任务定位到地图按钮，无法回填委托地点")
-            self.ensure_main()
-            return None
-
-        self.click(map_jump_btn, after_sleep=2)
-        self.wait_ui_stable(refresh_interval=1)
-        ocr_locations = get_ocr_priority_locations(self.delivery_area) or get_delivery_locations(self.delivery_area)
-        ocr_results = self.wait_ocr(
-            match=ocr_locations,
-            box=self.box.top_right,
-            time_out=3,
-            raise_if_not_found=False,
-            log=True,
-        )
-
-        recovered_location = None
-        if ocr_results:
-            for location_name in ocr_locations:
-                if any(location_name in item.name for item in ocr_results):
-                    recovered_location = location_name
-                    break
-            if recovered_location is None:
-                for item in ocr_results:
-                    recovered_location = extract_delivery_location(item.name, self.delivery_area)
-                    if recovered_location:
-                        break
-
-        self.ensure_main()
-        if recovered_location:
-            self._accepted_delivery_location = recovered_location
-            self.log_info(f"已从地图右上角地点文字回填委托地点: {recovered_location}")
-            return recovered_location
-
-        self.log_info("地图右上角未识别到可用地点文字，无法回填委托地点")
         return None
 
     def _run_single_delivery_cycle(self):
@@ -700,8 +642,8 @@ class DeliveryTask(AccountMixin, ZipLineMixin, MapMixin):
                     success = None
                     for _ in range(3):
                         search_box = self._resolve_transfer_point_search_box()
-                        if search_box is None:
-                            self.log_info("未能确定传送点搜索区域（地点未缓存或配置缺失），终止本轮送货")
+                        if search_box is None and self._accepted_delivery_location:
+                            self.log_info("未能确定传送点搜索区域（地点配置缺失），终止本轮送货")
                             return
                         success = self.task_to_transfer_point(search_box)
                         if success:

@@ -1,8 +1,50 @@
 import re
+from src.data.delivery_area_service import extract_delivery_location, get_delivery_locations, get_ocr_priority_locations
 from src.tasks.BaseEfTask import BaseEfTask
 
 
 class MapMixin(BaseEfTask):
+    def _try_recover_delivery_location_on_map(self):
+        """地图已打开时，尝试通过右上角地点文字回填送货地点缓存。"""
+        if not hasattr(self, "_accepted_delivery_location"):
+            return
+        if getattr(self, "_accepted_delivery_location", None):
+            return
+        area_name = getattr(self, "delivery_area", None)
+        if not area_name:
+            return
+        try:
+            ocr_locations = get_ocr_priority_locations(area_name) or get_delivery_locations(area_name)
+        except Exception:
+            return
+        if not ocr_locations:
+            return
+
+        ocr_results = self.wait_ocr(
+            match=ocr_locations,
+            box=self.box.top_right,
+            time_out=3,
+            raise_if_not_found=False,
+            log=True,
+        )
+        if not ocr_results:
+            return
+
+        recovered_location = None
+        for location_name in ocr_locations:
+            if any(location_name in item.name for item in ocr_results):
+                recovered_location = location_name
+                break
+        if recovered_location is None:
+            for item in ocr_results:
+                recovered_location = extract_delivery_location(item.name, area_name)
+                if recovered_location:
+                    break
+
+        if recovered_location:
+            setattr(self, "_accepted_delivery_location", recovered_location)
+            self.log_info(f"已从地图右上角地点文字回填委托地点: {recovered_location}")
+
     def task_to_transfer_point(self, test_target_box=None):
         """
         传送到运输委托对应的出发传送点。
@@ -51,6 +93,14 @@ class MapMixin(BaseEfTask):
 
         # 等待 UI 稳定（地图加载完成）
         self.wait_ui_stable(refresh_interval=1)
+
+        self._try_recover_delivery_location_on_map()
+        if hasattr(self, "_get_transfer_search_box_by_location"):
+            location_name = getattr(self, "_accepted_delivery_location", None)
+            if location_name:
+                resolved_box = self._get_transfer_search_box_by_location(location_name)
+                if resolved_box:
+                    test_target_box = resolved_box
 
         # 执行附近传送点传送
         return self.to_near_transfer_point(test_target_box)
